@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardId } from '../game/data/cards';
-import { canPlay, playCard, startBargain, walkAway, type BargainOpts } from '../game/sim/bargain';
+import { canPlay, playCard, previewPlay, startBargain, walkAway, type BargainOpts } from '../game/sim/bargain';
 import type { NpcDef } from '../game/sim/state';
 
 function npc(over: Partial<NpcDef> = {}): NpcDef {
@@ -186,6 +186,42 @@ describe('soul bargain', () => {
     const before = st.patience;
     playCard(st, 0); // desire hit, but combo only just starting
     expect(st.patience).toBe(before - 1);
+  });
+
+  it('bold delivery hits harder and spikes suspicion; subtle is gentler', () => {
+    const bold = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 99 });
+    const eb = playCard(bold, 0, { boldness: 1, crit: false });
+    const subtle = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 99 });
+    const es = playCard(subtle, 0, { boldness: 0, crit: false });
+    expect(eb.find((e) => e.kind === 'dmg')!.amount!).toBeGreaterThan(es.find((e) => e.kind === 'dmg')!.amount!);
+    expect(eb.find((e) => e.kind === 'susp')!.amount!).toBeGreaterThan(es.find((e) => e.kind === 'susp')!.amount!);
+  });
+
+  it('a crit (sweet spot) hits hard and keeps them calmer', () => {
+    const norm = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const en = playCard(norm, 0, { boldness: 0.5, crit: false });
+    const crit = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const ec = playCard(crit, 0, { boldness: 0.5, crit: true });
+    expect(ec.find((e) => e.kind === 'dmg')!.amount!).toBeGreaterThan(en.find((e) => e.kind === 'dmg')!.amount!);
+    expect(ec.find((e) => e.kind === 'susp')!.amount!).toBeLessThan(en.find((e) => e.kind === 'susp')!.amount!);
+  });
+
+  it('a neutral delivery matches no delivery at all', () => {
+    const a = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const b = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const ea = playCard(a, 0);
+    const eb = playCard(b, 0, { boldness: 0.5, crit: false });
+    expect(eb.find((e) => e.kind === 'dmg')!.amount).toBe(ea.find((e) => e.kind === 'dmg')!.amount);
+    expect(eb.find((e) => e.kind === 'susp')!.amount).toBe(ea.find((e) => e.kind === 'susp')!.amount);
+  });
+
+  it('previewPlay matches what the card actually does', () => {
+    const st = start(Array(9).fill('love-1') as CardId[]);
+    const pv = previewPlay(st, 0)!;
+    const ev = playCard(st, 0);
+    expect(pv.dmg).toBe(ev.find((e) => e.kind === 'dmg')!.amount);
+    expect(pv.susp).toBe(ev.find((e) => e.kind === 'susp')!.amount);
+    expect(pv.hit).toBe('desire');
   });
 
   it('a hot combo lets them lean in (a free turn), once earned', () => {

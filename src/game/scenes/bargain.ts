@@ -9,11 +9,13 @@ import {
   canPlay,
   HAND_SIZE,
   playCard,
+  previewPlay,
   startBargain,
   SUSPICION_MAX,
   walkAway,
   type BargainOpts,
   type BargainState,
+  type Delivery,
   type HitBucket,
   type Mood,
 } from '../sim/bargain';
@@ -44,6 +46,9 @@ const DEAL_START = 0.8;
 const DEAL_STEP = 0.16;
 const DEAL_TWEEN = 0.24;
 const INTRO_END = DEAL_START + HAND_SIZE * DEAL_STEP + DEAL_TWEEN + 0.3;
+
+/** Delivery-meter sweep speed (full bar widths per second). */
+const DELIVERY_SPEED = 1.5;
 
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -84,6 +89,9 @@ const SCENE_BG = '#0e0812';
 export class BargainScene implements GScene {
   private st: BargainState;
   private sel = 0;
+  /** Active delivery meter: a marker sweeping SUBTLE..BOLD that the player
+   * stops to set how the readied line lands. */
+  private delivery: { idx: number; pos: number; dir: number; sweetLo: number; sweetHi: number } | null = null;
   private log: LogLine[] = [];
   private npcLine: string;
   private floats: Floater[] = [];
@@ -131,11 +139,15 @@ export class BargainScene implements GScene {
     return n;
   }
 
-  private processPlay(c: GameCtx, idx: number): void {
+  private processPlay(c: GameCtx, idx: number, delivery?: Delivery): void {
     const prevMood = this.st.mood;
     const playedCard = CARDS[this.st.hand[idx]];
-    const events = playCard(this.st, idx);
+    const events = playCard(this.st, idx, delivery);
     const arch = ARCHETYPES[this.st.npc.archetype];
+    if (delivery?.crit) {
+      c.audio.play('levelup');
+      this.floats.push({ text: 'PERFECT!', color: UI.gold, x: 300, y: 30, t: 1.2 });
+    }
     let hit: HitBucket | undefined;
     for (const ev of events) {
       switch (ev.kind) {
@@ -279,6 +291,29 @@ export class BargainScene implements GScene {
       return;
     }
 
+    // --- Delivery meter: the marker sweeps; confirm stops it and speaks. ---
+    if (this.delivery) {
+      const m = this.delivery;
+      m.pos += m.dir * DELIVERY_SPEED * dt;
+      if (m.pos >= 1) {
+        m.pos = 1;
+        m.dir = -1;
+      } else if (m.pos <= 0) {
+        m.pos = 0;
+        m.dir = 1;
+      }
+      if (c.input.hit('confirm')) {
+        const crit = m.pos >= m.sweetLo && m.pos <= m.sweetHi;
+        const idx = m.idx;
+        this.delivery = null;
+        this.processPlay(c, idx, { boldness: m.pos, crit });
+      } else if (c.input.hit('cancel')) {
+        this.delivery = null;
+        c.audio.play('blip');
+      }
+      return;
+    }
+
     if (c.input.hit('cancel')) {
       this.confirmExit = true;
       c.audio.play('blip');
@@ -299,7 +334,12 @@ export class BargainScene implements GScene {
         if (check.reason) this.pushLog(check.reason, UI.dim);
         return;
       }
-      this.processPlay(c, this.sel);
+      // Begin the delivery meter for the chosen line. The sweet spot is placed
+      // fresh each time, so it's pure read-and-react, never memorized.
+      const w = 0.13;
+      const lo = 0.08 + Math.random() * (0.92 - 0.08 - w);
+      this.delivery = { idx: this.sel, pos: 0, dir: 1, sweetLo: lo, sweetHi: lo + w };
+      c.audio.play('confirm');
     }
   }
 
@@ -427,6 +467,45 @@ export class BargainScene implements GScene {
     r.text(this.npcLine.length > 50 ? this.npcLine.slice(0, 50) + '...' : this.npcLine, 158, 155, UI.text);
   }
 
+  /** The SUBTLE..BOLD delivery meter, drawn over the log while a line is being
+   * delivered. Shows the live projected effect so the tradeoff is legible. */
+  private drawMeter(c: GameCtx): void {
+    const r = c.r;
+    const m = this.delivery!;
+    const card = CARDS[this.st.hand[m.idx]];
+    const crit = m.pos >= m.sweetLo && m.pos <= m.sweetHi;
+    const pv = previewPlay(this.st, m.idx, { boldness: m.pos, crit });
+
+    const px = 150;
+    const py = 126;
+    const pw = 322;
+    r.rect(px, py, pw, 42, '#160a12');
+    r.frame(px, py, pw, 42, UI.borderHi);
+
+    const name = card.name.length > 16 ? card.name.slice(0, 15) + '.' : card.name;
+    r.text(name, px + 6, py + 4, UI.accent);
+    if (pv) {
+      const dmgTxt = pv.hit === 'ick' ? 'BACKFIRE' : pv.dmg > 0 ? `-${pv.dmg}${pv.variance ? '~' : ''} WP` : 'no dmg';
+      r.text(dmgTxt, px + pw - 6, py + 4, crit ? UI.gold : pv.hit === 'ick' ? UI.bad : UI.good, { align: 'right' });
+      const s = `${pv.susp > 0 ? `+${pv.susp}` : ''}${pv.soothe > 0 ? ` -${pv.soothe}` : ''} sus -> ${pv.suspAfter}/${SUSPICION_MAX}`;
+      r.text(s, px + pw / 2, py + 4, pv.flees ? UI.bad : UI.dim, { align: 'center' });
+    }
+
+    // The bar.
+    const bx = px + 8;
+    const by = py + 24;
+    const bw = pw - 16;
+    r.text('SUBTLE', bx, py + 15, UI.blue);
+    r.text('BOLD', bx + bw, py + 15, UI.bad, { align: 'right' });
+    r.rect(bx, by, bw, 8, '#0c080c');
+    // sweet spot
+    r.rect(bx + Math.round(m.sweetLo * bw), by, Math.max(2, Math.round((m.sweetHi - m.sweetLo) * bw)), 8, UI.gold, crit ? 1 : 0.55);
+    r.frame(bx, by, bw, 8, UI.border);
+    // marker
+    const mx = bx + Math.round(m.pos * bw);
+    r.rect(mx - 1, by - 3, 3, 14, crit ? UI.gold : '#fff4e0');
+  }
+
   /** Carve the four corners to the scene background so the card reads round. */
   private roundCorners(c: GameCtx, x: number, y: number, w: number, h: number): void {
     const r = c.r;
@@ -460,15 +539,21 @@ export class BargainScene implements GScene {
 
   /** A dialogue line rendered as an actual playing card. The banner names the
    * hunger (WEALTH / ESCAPE / PLAIN...); the wrapped caption is what you say. */
-  private drawCard(c: GameCtx, card: CardDef, x: number, y: number, selected: boolean, playable: boolean, hint: LogLine | null): void {
+  private drawCard(c: GameCtx, card: CardDef, x: number, y: number, selected: boolean, playable: boolean, hint: LogLine | null, hot = false): void {
     const r = c.r;
     const W = CARD_W;
     const H = CARD_H;
-    if (selected) r.rect(x - 3, y - 3, W + 6, H + 6, UI.accent, 0.25);
+    if (hot) {
+      const pulse = 0.3 + Math.sin(this.t * 10) * 0.2;
+      r.rect(x - 4, y - 4, W + 8, H + 8, UI.accent, pulse);
+    } else if (selected) {
+      r.rect(x - 3, y - 3, W + 6, H + 6, UI.accent, 0.25);
+    }
     r.rect(x + 2, y + 4, W, H, UI.shadow, 0.5);
     r.rect(x, y, W, H, '#1d1622');
     this.roundCorners(c, x, y, W, H);
-    r.frame(x, y, W, H, selected ? UI.accent : '#7a6a52');
+    r.frame(x, y, W, H, selected || hot ? UI.accent : '#7a6a52');
+    if (hot) r.frame(x + 1, y + 1, W - 2, H - 2, UI.accent);
     r.frame(x + 2, y + 2, W - 4, H - 4, '#352a36');
 
     // Banner = the hunger this line appeals to.
@@ -557,7 +642,9 @@ export class BargainScene implements GScene {
         if (p > 0.76 && p < 0.88) r.rect(cx + CARD_W / 2 - 1, cy, 2, CARD_H, '#fff4e0', 0.6);
       } else {
         const selected = i === this.sel;
-        this.drawCard(c, card, slotX, HAND_Y + (selected ? -5 : 0), selected, canPlay(st, i).ok, this.cardHint(card));
+        const hot = this.delivery?.idx === i;
+        const lift = hot ? -10 : selected ? -5 : 0;
+        this.drawCard(c, card, slotX, HAND_Y + lift, selected, canPlay(st, i).ok, this.cardHint(card), hot);
       }
     });
   }
@@ -592,7 +679,14 @@ export class BargainScene implements GScene {
       return;
     }
 
-    drawHintBar(c, '[LEFT/RIGHT] CHOOSE LINE   [ENTER] SPEAK   [ESC] WALK AWAY');
+    if (this.delivery) this.drawMeter(c);
+
+    drawHintBar(
+      c,
+      this.delivery
+        ? 'SUBTLE <-> BOLD   [ENTER] LAND THE LINE (hit the sweet spot to nail it)   [ESC] RECONSIDER'
+        : '[LEFT/RIGHT] WEIGH A LINE   [ENTER] DELIVER IT   [ESC] WALK AWAY',
+    );
 
     if (this.confirmExit) {
       r.dim(0.55);

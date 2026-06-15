@@ -29,6 +29,28 @@ const LEAN_IN_COMBO = 4;
 const WARY_AT = 30;
 const PRIME_BONUS = 6;
 
+/** How a line is delivered, set by the player's timing on the SUBTLE↔BOLD
+ * meter. boldness 0 = subtle (softer, safer), 1 = bold (harder, riskier),
+ * 0.5 = a measured, neutral delivery (the default with no meter — headless /
+ * tests). A crit (nailed the sweet spot) hits hard AND keeps them at ease. */
+export interface Delivery {
+  boldness: number;
+  crit: boolean;
+}
+const BOLD_DMG = 0.8;
+const BOLD_SUSP = 1.0;
+const CRIT_DMG = 1.4;
+const CRIT_SUSP = 0.6;
+
+function deliveryDmgMult(d?: Delivery): number {
+  if (!d) return 1;
+  return (1 + (d.boldness - 0.5) * BOLD_DMG) * (d.crit ? CRIT_DMG : 1);
+}
+function deliverySuspMult(d?: Delivery): number {
+  if (!d) return 1;
+  return (1 + (d.boldness - 0.5) * BOLD_SUSP) * (d.crit ? CRIT_SUSP : 1);
+}
+
 export interface RevealState {
   traits: [boolean, boolean];
   quirk: boolean;
@@ -174,7 +196,7 @@ export function keywordHit(npc: NpcDef, kw: Keyword): HitBucket {
   return affinities.has(kw) ? 'trait' : 'plain';
 }
 
-export function playCard(st: BargainState, idx: number): BargainEvent[] {
+export function playCard(st: BargainState, idx: number, delivery?: Delivery): BargainEvent[] {
   const events: BargainEvent[] = [];
   const check = canPlay(st, idx);
   if (!check.ok) return events;
@@ -227,6 +249,7 @@ export function playCard(st: BargainState, idx: number): BargainEvent[] {
   mult *= st.dmgMult; // permanent meta boost
   // Momentum: the chain so far amplifies this line (read before we update it).
   mult *= 1 + st.rapport * RAPPORT_STEP;
+  mult *= deliveryDmgMult(delivery); // how boldly you spoke it
 
   let dmg = Math.round(base * mult);
   if (st.npc.quirk === 'DRUNK' && dmg > 0) dmg = Math.round(dmg * st.rng.range(0.6, 1.4));
@@ -256,8 +279,9 @@ export function playCard(st: BargainState, idx: number): BargainEvent[] {
   // --- Suspicion ---
   let susBase = card.susp + (hit === 'ick' ? 6 : 0);
   if (susBase > 0) {
-    // The deeper the combo, the harder the sell reads — suspicion ramps with it.
-    let gain = susBase * st.npc.susRate * st.suspMult * (1 + comboLevel * SUSP_COMBO_STEP);
+    // The deeper the combo, the harder the sell reads — and a bold delivery
+    // pushes it further; a subtle one (or a crit) keeps them calmer.
+    let gain = susBase * st.npc.susRate * st.suspMult * (1 + comboLevel * SUSP_COMBO_STEP) * deliverySuspMult(delivery);
     if (st.npc.quirk === 'DEVOUT') gain *= 1.5;
     if (st.mood === 'wary') gain *= 1.5;
     if (st.charms.includes('silver-tongue')) gain *= 1.1;
@@ -355,6 +379,76 @@ function revealSomething(st: BargainState, events: BargainEvent[], preferDesire:
     return;
   }
   st.rng.pick(options)();
+}
+
+export interface PlayPreview {
+  dmg: number;
+  hit: HitBucket;
+  susp: number;
+  soothe: number;
+  willAfter: number;
+  suspAfter: number;
+  signs: boolean;
+  flees: boolean;
+  /** DRUNK marks make damage swing ±40%, so the figure is only a guess. */
+  variance: boolean;
+}
+
+/** Project what a card would do right now, without consuming RNG or mutating
+ * state — feeds the confirm-to-play consequence readout. Mirrors playCard's
+ * deterministic math (DRUNK variance excluded; flagged instead). */
+export function previewPlay(st: BargainState, idx: number, delivery?: Delivery): PlayPreview | null {
+  if (!canPlay(st, idx).ok) return null;
+  const card = CARDS[st.hand[idx]];
+
+  let base = card.dmg;
+  if (card.special === 'advocate') base = Math.floor(st.suspicion / 3);
+  if (card.special === 'finePrint') base += st.rapport * 2;
+  if (base > 0 && st.primed) base += PRIME_BONUS;
+  if (base > 0) base += st.flatDmgBonus;
+  if (base > 0 && st.nextDmgPenalty > 0) base = Math.max(0, base - st.nextDmgPenalty);
+
+  let hit: HitBucket = 'plain';
+  let mult = 1;
+  if (card.kw) {
+    hit = keywordHit(st.npc, card.kw);
+    if (hit === 'desire') mult = 3;
+    else if (hit === 'trait') mult = 1.75;
+    else if (hit === 'ick') mult = 0;
+    if (st.npc.quirk === 'SKEPTIC' && mult > 1) mult = 1 + (mult - 1) * 0.5;
+  }
+  if (st.mood === 'receptive') mult *= 1.25;
+  if (st.mood === 'offended') mult *= 0.75;
+  if (st.charms.includes('silver-tongue')) mult *= 1.25;
+  mult *= st.dmgMult;
+  mult *= 1 + st.rapport * RAPPORT_STEP;
+  mult *= deliveryDmgMult(delivery);
+  let dmg = hit === 'ick' ? 0 : Math.max(0, Math.round(base * mult));
+
+  let susp = 0;
+  const susBase = card.susp + (hit === 'ick' ? 6 : 0);
+  if (susBase > 0) {
+    let g = susBase * st.npc.susRate * st.suspMult * (1 + st.rapport * SUSP_COMBO_STEP) * deliverySuspMult(delivery);
+    if (st.npc.quirk === 'DEVOUT') g *= 1.5;
+    if (st.mood === 'wary') g *= 1.5;
+    if (st.charms.includes('silver-tongue')) g *= 1.1;
+    susp = Math.max(1, Math.round(g));
+  }
+  const soothe = card.soothe ? card.soothe * (st.charms.includes('velvet-glove') ? 2 : 1) : 0;
+
+  const willAfter = Math.max(0, st.willpower - dmg);
+  const suspAfter = Math.max(0, Math.min(SUSPICION_MAX, st.suspicion + susp) - soothe);
+  return {
+    dmg,
+    hit,
+    susp,
+    soothe,
+    willAfter,
+    suspAfter,
+    signs: dmg > 0 && willAfter <= 0,
+    flees: Math.min(SUSPICION_MAX, st.suspicion + susp) >= SUSPICION_MAX,
+    variance: st.npc.quirk === 'DRUNK' && dmg > 0,
+  };
 }
 
 export function walkAway(st: BargainState): void {
