@@ -2,7 +2,7 @@ import { Rng } from '../../engine/rng';
 import type { GameCtx, GScene } from '../ctx';
 import { ARCHETYPES } from '../data/archetypes';
 import { DISTRICTS, isWalkable, MAP_H, MAP_W, type DistrictId } from '../data/districts';
-import { AURAS, buildCharacter, CHAR_H, HORNS, PLAYER_PALETTE, SATAN, type CharSprites } from '../data/sprites/chars';
+import { AURAS, buildCharacter, CHAR_H, HALO, HORNS, PLAYER_PALETTE, PRIEST_PALETTE, SATAN, type CharSprites } from '../data/sprites/chars';
 import { buildTileSet, TILE, type TileSet } from '../data/sprites/tiles';
 import type { RevealState } from '../sim/bargain';
 import { genNpcs } from '../sim/npcgen';
@@ -36,6 +36,19 @@ interface WorldNpc {
 
 const DEEP_SCAN_HOLD = 0.85;
 const TALK_RANGE = 26;
+/** Fleeing this many marks (or blowing your cover on an angel) summons the
+ * Exorcist to hunt you for the rest of the day. */
+const HUNT_HEAT = 2;
+const HUNTER_SPEED = 48;
+const HUNTER_CATCH = 13;
+
+interface Hunter {
+  x: number;
+  y: number;
+  dir: Dir;
+  frame: number;
+  animT: number;
+}
 
 export class OverworldScene implements GScene {
   private run: RunState;
@@ -55,6 +68,10 @@ export class OverworldScene implements GScene {
   private toasts: Array<{ text: string; t: number; color: string }> = [];
   private wrng!: Rng;
   private t = 0;
+  private hunter: Hunter | null = null;
+  private priestSprites!: CharSprites;
+  /** Walkable tiles far from spawn, reused to place the hunter. */
+  private spawnSpots: Array<[number, number]> = [];
 
   constructor(run: RunState, districtId: DistrictId) {
     this.run = run;
@@ -69,6 +86,7 @@ export class OverworldScene implements GScene {
     const d = this.district;
     this.tiles = buildTileSet(d.theme);
     this.playerSprites = buildCharacter(PLAYER_PALETTE, 'player');
+    this.priestSprites = buildCharacter(PRIEST_PALETTE, 'priest');
     this.wrng = new Rng(`world:${this.run.seed}:${this.run.day}:${d.id}`);
     this.px = d.spawn[0] * TILE + TILE / 2;
     this.py = d.spawn[1] * TILE + TILE - 3;
@@ -85,6 +103,7 @@ export class OverworldScene implements GScene {
       }
     }
     const spots = this.wrng.shuffle(candidates);
+    this.spawnSpots = spots;
     this.npcs = defs.map((def, i) => {
       const [tx, ty] = spots[i % spots.length];
       const arch = ARCHETYPES[def.archetype];
@@ -203,6 +222,10 @@ export class OverworldScene implements GScene {
         else if (this.onPortal()) this.modal = 'sleep';
       }
     }
+
+    // Heat brings the hunter; once loose, it stalks you all day.
+    if (!this.hunter && this.run.fledToday >= HUNT_HEAT) this.spawnHunter(c);
+    if (this.hunter) this.updateHunter(c, dt);
 
     this.updatePlayer(c, dt);
     this.updateNpcs(dt);
@@ -348,7 +371,70 @@ export class OverworldScene implements GScene {
     if (n.def.quirk) this.toast(`Complication: ${n.def.quirk}`, UI.accent);
   }
 
+  /** Pitching a disguised angel blows your cover instead of bargaining. */
+  private exposeAngel(c: GameCtx, n: WorldNpc): void {
+    n.gone = true;
+    this.run.fledToday += 3; // instant, heavy heat — the hunter is coming
+    c.audio.play('satan');
+    this.toast('AN ANGEL! Your cover is blown — they know what you are.', UI.bad);
+    this.toast('The whole street turns wary. Something is coming.', UI.bad);
+  }
+
+  private spawnHunter(c: GameCtx): void {
+    // Place it on a far walkable tile, away from the player.
+    let best: [number, number] | null = null;
+    let bestD = -1;
+    for (const [tx, ty] of this.spawnSpots) {
+      const sx = tx * TILE + TILE / 2;
+      const sy = ty * TILE + TILE - 3;
+      const d = Math.hypot(sx - this.px, sy - this.py);
+      if (d > bestD) {
+        bestD = d;
+        best = [sx, sy];
+      }
+    }
+    const [hx, hy] = best ?? [this.px + 120, this.py];
+    this.hunter = { x: hx, y: hy, dir: 'down', frame: 0, animT: 0 };
+    c.audio.play('satan');
+    this.toast('A PRIEST is hunting you. REACH THE MANHOLE.', UI.bad);
+  }
+
+  private updateHunter(c: GameCtx, dt: number): void {
+    const h = this.hunter!;
+    const ddx = this.px - h.x;
+    const ddy = this.py - h.y;
+    const dist = Math.hypot(ddx, ddy);
+    if (dist < HUNTER_CATCH) {
+      this.caught(c);
+      return;
+    }
+    if (dist > 0.1) {
+      const nx = h.x + (ddx / dist) * HUNTER_SPEED * dt;
+      const ny = h.y + (ddy / dist) * HUNTER_SPEED * dt;
+      // Slide along walls so corners don't stop it dead.
+      if (this.walkableAt(nx, h.y)) h.x = nx;
+      if (this.walkableAt(h.x, ny)) h.y = ny;
+      h.dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx < 0 ? 'left' : 'right') : ddy < 0 ? 'up' : 'down';
+      h.animT += dt;
+      if (h.animT > 0.2) {
+        h.animT = 0;
+        h.frame = 1 - h.frame;
+      }
+    }
+  }
+
+  private caught(c: GameCtx): void {
+    this.hunter = null;
+    c.audio.play('satan');
+    // The Boss is summoned regardless of quota — the run is over.
+    c.scenes.replace(c, new DayEndScene(this.run, 'satan', true));
+  }
+
   private startBargain(c: GameCtx, n: WorldNpc): void {
+    if (n.def.isAngel) {
+      this.exposeAngel(c, n);
+      return;
+    }
     const revealDesire = this.run.longingArmed;
     this.run.longingArmed = false;
     c.audio.play('confirm');
@@ -360,6 +446,10 @@ export class OverworldScene implements GScene {
           deck: this.run.deck.slice(),
           charms: this.run.charms,
           flatDmgBonus: c.meta.has('forked-tongue') ? 1 : 0,
+          patienceBonus: c.meta.has('iron-patience') ? 1 : 0,
+          handBonus: c.meta.has('extra-hand') ? 1 : 0,
+          dmgMult: c.meta.has('unholy-charisma') ? 1.15 : 1,
+          suspMult: c.meta.has('cool-customer') ? 0.85 : 1,
           startSuspicion: this.run.fledToday * 10,
           revealDesire,
           reveal: n.reveal,
@@ -372,7 +462,7 @@ export class OverworldScene implements GScene {
             n.gone = true;
             this.run.soulsToday += 1;
             this.run.totalSouls += 1;
-            const pay = soulPayout(this.run, n.def);
+            const pay = soulPayout(this.run, n.def) + (c.meta.has('connoisseur') ? 1 : 0);
             this.run.coins += pay;
             c.audio.play('coin');
             this.toast(`SOUL COLLECTED  +$${pay}`, UI.good);
@@ -477,6 +567,17 @@ export class OverworldScene implements GScene {
         r.sprite(spr, this.px - 8 - camX, this.py - CHAR_H + 1 - camY, { flipX: this.pdir === 'right' });
       },
     });
+    if (this.hunter) {
+      const h = this.hunter;
+      bodies.push({
+        y: h.y,
+        fn: () => {
+          const spr = h.dir === 'up' ? this.priestSprites.up[h.frame] : h.dir === 'down' ? this.priestSprites.down[h.frame] : this.priestSprites.side[h.frame];
+          r.sprite(spr, h.x - 8 - camX, h.y - CHAR_H + 1 - camY, { flipX: h.dir === 'right' });
+          r.sprite(HALO, h.x - 5 - camX, h.y - CHAR_H - 4 - camY);
+        },
+      });
+    }
     bodies.sort((a, b) => a.y - b.y);
     for (const b of bodies) b.fn();
 
@@ -488,6 +589,22 @@ export class OverworldScene implements GScene {
         if (n.gone) continue;
         const lx = n.x - camX;
         let ly = n.y - CHAR_H - 8 - camY;
+        if (n.def.isAngel) {
+          // No soul to read — just a warning and the halo.
+          r.sprite(HALO, n.x - 5 - camX, n.y - CHAR_H - 4 - camY);
+          const warn = [
+            { text: 'ANGEL', color: '#fff0c0' },
+            { text: 'DO NOT ENGAGE', color: UI.bad },
+          ];
+          ly -= (warn.length - 1) * 9;
+          for (const line of warn) {
+            const w = r.textWidth(line.text);
+            r.rect(lx - w / 2 - 2, ly - 1, w + 4, 9, '#08050a', 0.8);
+            r.text(line.text, lx, ly, line.color, { align: 'center' });
+            ly += 9;
+          }
+          continue;
+        }
         const lines: Array<{ text: string; color: string }> = [];
         if (n.reveal.traits[0] || n.reveal.traits[1]) {
           lines.push({ text: `${n.def.traits[0]}/${n.def.traits[1]}`, color: UI.blue });
@@ -563,7 +680,18 @@ export class OverworldScene implements GScene {
       r.dim(Math.max(0, pulse), '#3a0610');
     }
 
+    // The hunt: a blood-red pulse that swells as the priest closes in.
+    if (this.hunter) {
+      const hd = Math.hypot(this.hunter.x - this.px, this.hunter.y - this.py);
+      const near = Math.max(0, 1 - hd / 200);
+      if (near > 0) r.dim(near * 0.32 * (0.7 + Math.sin(this.t * 10) * 0.3), '#4a0610');
+    }
+
     drawTopBar(c, this.run);
+
+    if (this.hunter && Math.floor(this.t * 2) % 2 === 0) {
+      r.text('A PRIEST HUNTS YOU - REACH THE MANHOLE', r.w / 2, 17, UI.bad, { align: 'center' });
+    }
 
     let hint: string;
     if (this.modal === 'sleep') hint = '[ENTER] SLEEP   [ESC] KEEP HUNTING';

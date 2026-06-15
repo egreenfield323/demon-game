@@ -59,7 +59,7 @@ describe('soul bargain', () => {
     expect(dmg.amount).toBe(0);
     expect(st.willpower).toBe(40);
     const susp = events.find((e) => e.kind === 'susp')!;
-    expect(susp.amount).toBe(20); // (8 + 12) * 1.0
+    expect(susp.amount).toBe(12); // (6 + 6) * 1.0
     expect(st.mood).toBe('offended');
     expect(st.reveal.ick).toBe(true);
   });
@@ -76,10 +76,10 @@ describe('soul bargain', () => {
     expect(st.status).toBe('signed');
   });
 
-  it('flees at 100 suspicion', () => {
-    const st = start(Array(9).fill('small-talk') as CardId[], {}, { startSuspicion: 99 });
+  it('flees when the suspicion meter fills', () => {
+    const st = start(Array(9).fill('small-talk') as CardId[], {}, { startSuspicion: 49 });
     playCard(st, 0);
-    expect(st.suspicion).toBe(100);
+    expect(st.suspicion).toBe(50);
     expect(st.status).toBe('fled');
   });
 
@@ -131,7 +131,7 @@ describe('soul bargain', () => {
 
     const st2 = start(Array(9).fill('listen') as CardId[], {}, { charms: ['velvet-glove'], startSuspicion: 30 });
     const ev2 = playCard(st2, 0);
-    expect(ev2.find((e) => e.kind === 'soothe')!.amount).toBe(24);
+    expect(ev2.find((e) => e.kind === 'soothe')!.amount).toBe(18); // listen 9 soothe, doubled
   });
 
   it('replenishes the hand from deck and discard', () => {
@@ -150,5 +150,51 @@ describe('soul bargain', () => {
   it('opal of echoes reveals a trait at the start', () => {
     const st = start(Array(9).fill('small-talk') as CardId[], {}, { charms: ['opal-echoes'] });
     expect(st.reveal.traits[0] || st.reveal.traits[1]).toBe(true);
+  });
+
+  it('rapport momentum amplifies a resonant chain', () => {
+    const st = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 99 });
+    const first = playCard(st, 0).find((e) => e.kind === 'dmg')!.amount!;
+    expect(first).toBe(18); // rapport 0, no bonus yet
+    expect(st.rapport).toBe(2);
+    const second = playCard(st, 0).find((e) => e.kind === 'dmg')!.amount!;
+    expect(second).toBeGreaterThan(first); // the chain pays off
+    expect(st.rapport).toBe(4);
+  });
+
+  it('a misread snaps the rapport chain', () => {
+    const st = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 99 });
+    playCard(st, 0);
+    expect(st.rapport).toBe(2);
+    st.hand[0] = 'wealth-1'; // their ICK
+    playCard(st, 0);
+    expect(st.rapport).toBe(0);
+  });
+
+  it('a setup card primes the next line for bonus damage', () => {
+    const st = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    st.hand = ['small-talk', 'love-1', 'love-1', 'love-1'];
+    playCard(st, 0); // Small Talk primes
+    expect(st.primed).toBe(true);
+    const ev = playCard(st, 0); // love-1 consumes the prime
+    expect(st.primed).toBe(false);
+    expect(ev.find((e) => e.kind === 'dmg')!.amount).toBe(36); // (6 + 6) * 3
+  });
+
+  it('patience is a firm budget — a single desire hit does not refund it', () => {
+    const st = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 8 });
+    const before = st.patience;
+    playCard(st, 0); // desire hit, but combo only just starting
+    expect(st.patience).toBe(before - 1);
+  });
+
+  it('a hot combo lets them lean in (a free turn), once earned', () => {
+    const st = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999, basePatience: 8 });
+    playCard(st, 0); // combo -> 2, patience -1
+    playCard(st, 0); // combo -> 4, patience -1
+    const held = st.patience;
+    const ev = playCard(st, 0); // desire at combo 4 -> they lean in, no cost
+    expect(st.patience).toBe(held);
+    expect(ev.some((e) => e.kind === 'patience')).toBe(true);
   });
 });

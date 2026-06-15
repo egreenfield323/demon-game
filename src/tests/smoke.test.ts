@@ -175,6 +175,30 @@ describe('headless playthrough', () => {
     expect(mark.done).toBe(true);
   });
 
+  it('a priest hunts the player at high heat and can drag them under', () => {
+    const { g, input } = makeGame();
+    tap(g, input, 'confirm'); // title -> pit
+    tap(g, input, 'up'); // BEGIN SHIFT
+    tap(g, input, 'confirm'); // -> city map
+    tap(g, input, 'confirm'); // -> overworld (commons)
+    expect(g.ctx.scenes.top).toBeInstanceOf(OverworldScene);
+
+    const ow = g.ctx.scenes.top as unknown as {
+      hunter: { x: number; y: number } | null;
+      px: number;
+      py: number;
+      run: { fledToday: number };
+    };
+    ow.run.fledToday = 2; // enough heat to summon the Exorcist
+    step(g, 2);
+    expect(ow.hunter).not.toBeNull();
+
+    ow.hunter!.x = ow.px; // collide with the player
+    ow.hunter!.y = ow.py;
+    step(g, 2);
+    expect(g.ctx.scenes.top).toBeInstanceOf(DayEndScene);
+  });
+
   it('pit can buy every upgrade with enough sin', () => {
     const { g, input } = makeGame();
     g.ctx.meta.state.sinPoints = 99;

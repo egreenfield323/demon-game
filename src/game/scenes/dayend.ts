@@ -14,6 +14,8 @@ export class DayEndScene implements GScene {
   constructor(
     private run: RunState,
     private outcome: DayOutcome,
+    /** Dragged off by the Exorcist rather than a missed quota. */
+    private caught = false,
   ) {}
 
   enter(c: GameCtx): void {
@@ -58,14 +60,19 @@ export class DayEndScene implements GScene {
       r.sprite(SATAN, r.w / 2 - 72 + shake, satanY, { scale: 6 });
       r.dim(0.25, '#3a0a0a');
 
-      if (this.t > 1.2) r.text('QUOTA UNMET.', r.w / 2, 30, UI.bad, { align: 'center', scale: 3 });
+      if (this.t > 1.2) {
+        r.text(this.caught ? 'EXPOSED.' : 'QUOTA UNMET.', r.w / 2, 30, UI.bad, { align: 'center', scale: 3 });
+      }
       if (this.t > 2.0) {
-        r.text(`${this.run.soulsToday} OF ${quotaFor(this.run)} SOULS. ON DAY ${this.run.day}.`, r.w / 2, 60, UI.text, {
-          align: 'center',
-        });
+        const sub = this.caught
+          ? 'A PRIEST HANDED YOU TO THE BOSS HIMSELF.'
+          : `${this.run.soulsToday} OF ${quotaFor(this.run)} SOULS. ON DAY ${this.run.day}.`;
+        r.text(sub, r.w / 2, 60, UI.text, { align: 'center' });
       }
       if (this.t > 2.8) {
-        r.text('"PATHETIC. EVEN FOR YOU."', r.w / 2, 76, '#ffd84a', { align: 'center' });
+        r.text(this.caught ? '"YOU LET THEM SEE YOU. SLOPPY."' : '"PATHETIC. EVEN FOR YOU."', r.w / 2, 76, '#ffd84a', {
+          align: 'center',
+        });
       }
       if (this.t > 3.4 && Math.floor(this.t * 2) % 2 === 0) {
         r.text('[ENTER] BE DRAGGED BACK', r.w / 2, 250, UI.dim, { align: 'center' });

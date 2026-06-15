@@ -112,7 +112,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeDef> = {
     barks: {
       idle: ['*falls asleep standing up, briefly*', '"Triple shift. I can taste colors."'],
       neutral: ['"I\'ve got about five minutes."', '"Sorry, you were saying?"', '"Mhm. I hear that a lot."'],
-      receptive: ['"God, it\'s nice to be listened to for once."', '"...yeah. Yeah, exactly."'],
+      receptive: ['"Honestly, it\'s nice to be listened to for once."', '"...yeah. Yeah, exactly."'],
       wary: ['"I\'ve seen every scam that walks into an ER."', '"This feels like a pitch."'],
       offended: ['"Wow. Read the room."', '"I deal with enough vampires at work."'],
       sign: '"If it means one full night of sleep... fine. FINE."',

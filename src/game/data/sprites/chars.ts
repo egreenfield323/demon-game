@@ -189,6 +189,22 @@ export const HORNS = makeSprite(
   'horns',
 );
 
+/** A blessed ring — marks angels (in vision) and the hunting priest. */
+export const HALO = makeSprite(
+  ['.xxxxxxxx.', 'x........x', '.xxxxxxxx.'],
+  { x: '#ffe8a0' },
+  'halo',
+);
+
+/** The Exorcist. A pale figure in black vestments with a white collar. */
+export const PRIEST_PALETTE: CharPalette = {
+  h: '#2a2620',
+  c: '#15151c',
+  p: '#101016',
+  t: '#e8e8e0',
+  s: '#d8c0a8',
+};
+
 const AURA_GRID = [
   '......xxxxxxxxxxxx......',
   '...xxxxxxxxxxxxxxxxxx...',

@@ -1,7 +1,7 @@
 import type { GameCtx, GScene } from '../ctx';
 import { ARCHETYPES } from '../data/archetypes';
 import { CARDS, type CardDef } from '../data/cards';
-import { KEYWORD_COLORS } from '../data/keywords';
+import { KEYWORD_COLORS, KEYWORD_REACTIONS } from '../data/keywords';
 import { TRAITS } from '../data/traits';
 import { CARD_ART, CARD_BACK, KEYWORD_ICONS, UTIL_ICONS } from '../data/sprites/cards';
 import { buildCharacter } from '../data/sprites/chars';
@@ -10,9 +10,11 @@ import {
   HAND_SIZE,
   playCard,
   startBargain,
+  SUSPICION_MAX,
   walkAway,
   type BargainOpts,
   type BargainState,
+  type HitBucket,
   type Mood,
 } from '../sim/bargain';
 import { drawHintBar, drawPanel, UI } from './hud';
@@ -131,14 +133,17 @@ export class BargainScene implements GScene {
 
   private processPlay(c: GameCtx, idx: number): void {
     const prevMood = this.st.mood;
+    const playedCard = CARDS[this.st.hand[idx]];
     const events = playCard(this.st, idx);
     const arch = ARCHETYPES[this.st.npc.archetype];
+    let hit: HitBucket | undefined;
     for (const ev of events) {
       switch (ev.kind) {
         case 'say':
           this.pushLog(`YOU: ${ev.text}`, UI.text);
           break;
         case 'dmg': {
+          hit = ev.hit;
           const amt = ev.amount ?? 0;
           if (amt <= 0) {
             c.audio.play('zeroHit');
@@ -151,6 +156,19 @@ export class BargainScene implements GScene {
           }
           break;
         }
+        case 'rapport': {
+          const amt = ev.amount ?? 0;
+          if (amt > 0) {
+            c.audio.play('blip');
+            this.floats.push({ text: `COMBO x${amt}`, color: amt >= 3 ? UI.gold : UI.accent, x: 300, y: 46, t: 1.1 });
+          } else {
+            this.floats.push({ text: 'RHYTHM LOST', color: UI.dim, x: 300, y: 46, t: 1 });
+          }
+          break;
+        }
+        case 'patience':
+          this.floats.push({ text: `+${ev.amount} PATIENCE`, color: UI.good, x: 210, y: 54, t: 1 });
+          break;
         case 'susp': {
           c.audio.play('suspicion');
           this.shakeS = 0.25;
@@ -182,15 +200,21 @@ export class BargainScene implements GScene {
 
     const status = this.st.status;
     if (status === 'active') {
-      const pool =
-        this.st.mood === 'receptive'
-          ? arch.barks.receptive
-          : this.st.mood === 'wary'
-            ? arch.barks.wary
-            : this.st.mood === 'offended'
-              ? arch.barks.offended
-              : arch.barks.neutral;
-      this.npcLine = this.bark(pool);
+      // If the line struck a hunger, the mark lets something slip about it;
+      // otherwise they react in-mood. Both pools are randomized per play.
+      if (playedCard.kw && hit && hit !== 'ick') {
+        this.npcLine = this.st.rng.pick(KEYWORD_REACTIONS[playedCard.kw]);
+      } else {
+        const pool =
+          this.st.mood === 'receptive'
+            ? arch.barks.receptive
+            : this.st.mood === 'wary'
+              ? arch.barks.wary
+              : this.st.mood === 'offended'
+                ? arch.barks.offended
+                : arch.barks.neutral;
+        this.npcLine = this.bark(pool);
+      }
     } else {
       this.terminal = true;
       if (status === 'signed') {
@@ -374,15 +398,19 @@ export class BargainScene implements GScene {
     r.text(`${st.willpower}/${npc.maxWillpower}`, 406, 25, UI.text);
 
     r.text('SUSPICION', 150, 38, UI.text);
+    const susFrac = Math.min(1, st.suspicion / SUSPICION_MAX);
     r.rect(150 + sob, 48, 250, 10, '#0c080c');
-    r.rect(151 + sob, 49, Math.round(248 * Math.min(1, st.suspicion / 100)), 8, st.suspicion < 50 ? '#c8a83a' : '#d8503a');
+    r.rect(151 + sob, 49, Math.round(248 * susFrac), 8, st.suspicion < SUSPICION_MAX * 0.5 ? '#c8a83a' : '#d8503a');
     r.frame(150 + sob, 48, 250, 10, UI.border);
-    r.text(`${st.suspicion}/100`, 406, 49, st.suspicion >= 70 ? UI.bad : UI.text);
+    r.text(`${st.suspicion}/${SUSPICION_MAX}`, 406, 49, st.suspicion >= SUSPICION_MAX * 0.7 ? UI.bad : UI.text);
 
     r.text('PATIENCE', 150, 62, UI.text);
     const pips = '*'.repeat(Math.max(0, st.patience)) + '-'.repeat(Math.max(0, st.maxPatience - st.patience));
     r.text(pips, 210, 62, UI.gold);
-    r.text(`MOOD: ${st.mood.toUpperCase()}`, 406, 62, MOOD_COLOR[st.mood], { align: 'right' });
+    r.text(`MOOD: ${st.mood.toUpperCase()}`, 300, 62, MOOD_COLOR[st.mood]);
+    if (st.rapport > 0) {
+      r.text(`COMBO x${st.rapport}`, 470, 62, st.rapport >= 3 ? UI.gold : UI.accent, { align: 'right' });
+    }
   }
 
   private drawLog(c: GameCtx): void {

@@ -59,4 +59,6 @@ export interface NpcDef {
   basePatience: number;
   soulValue: number;
   skin: string;
+  /** A disguised angel salted into the crowd. Pitching one blows your cover. */
+  isAngel?: boolean;
 }

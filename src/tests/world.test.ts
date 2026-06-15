@@ -44,6 +44,21 @@ describe('npc generation', () => {
     expect(c).not.toEqual(a);
   });
 
+  it('salts a disguised angel into the crowd, deterministically', () => {
+    const d = DISTRICTS[DISTRICT_LIST[0]];
+    const a = genNpcs(newRun(meta, 4321), d).map((n) => !!n.isAngel);
+    const b = genNpcs(newRun(meta, 4321), d).map((n) => !!n.isAngel);
+    expect(a).toEqual(b); // same seed, same angel placement
+
+    let anyAngel = false;
+    for (let s = 0; s < 60 && !anyAngel; s++) {
+      for (const id of DISTRICT_LIST) {
+        if (genNpcs(newRun(meta, s), DISTRICTS[id]).some((n) => n.isAngel)) anyAngel = true;
+      }
+    }
+    expect(anyAngel).toBe(true);
+  });
+
   it('produces coherent humans', () => {
     const run = newRun(meta, 99);
     for (const district of DISTRICT_LIST) {

@@ -27,12 +27,14 @@ A low-level demon on his last warning is sent to the land of the living to close
 
 ## The Soul-Bargain (conversation battler)
 
-Their **Willpower** is the shield; **Suspicion** is the alarm; **Patience** is the turn limit (min 3).
+Their **Willpower** is the shield; **Suspicion** is a tight alarm (cap **50**); **Patience** is the turn limit (min 3).
 
-- Hand of 4 drawn from your deck (start: 9 lines). Play 1 per turn, redraw; discard recycles.
-- Keyword multipliers: Desire **3x** / trait affinity **1.75x** / neutral 1x / Ick **0x + 12 bonus suspicion + OFFENDED**.
+- Hand of 4 drawn from your deck (start: 12 lines — a full set of basic appeals, so you're never RNG-starved). Play 1 per turn, redraw; discard recycles.
+- Keyword multipliers: Desire **3x** / trait affinity **1.75x** / neutral 1x / Ick **0x + 6 bonus suspicion + OFFENDED**.
+- **Rapport (combo)**: each resonant line (desire/trait) builds momentum (+2/+1, cap 5) that amplifies damage (+15%/point) **but also ramps the suspicion each appeal generates (+16%/point)** — chaining is a race to close before the alarm trips, not free speed. A misread, an Ick, or a neutral line snaps the chain to 0. **Setup→payoff**: Small Talk primes the next line (+6 dmg); The Fine Print scales +2 dmg per Rapport.
+- **Patience** is a firm turn budget (−1/turn, Ick −2). The only regain is hard-earned: a Desire hit landed while the chain is already hot (combo 4+) makes them lean in and skips the turn cost.
 - Suspicion gain = card cost x their suspicion rate, x1.5 if DEVOUT, x1.5 while WARY.
-- **Moods**: big hits (12+) can make them RECEPTIVE (+25% damage); 60+ suspicion risks WARY; Icks cause OFFENDED (-25% damage, next turn).
+- **Moods**: big hits (12+) can make them RECEPTIVE (+25% damage); 30+ suspicion risks WARY; Icks cause OFFENDED (-25% damage, next turn).
 - Quirks: **SKEPTIC** halves keyword bonuses, **DRUNK** is -15% willpower but ±40% damage variance, **DEVOUT** as above.
 - Fleeing marks raise district heat: +10 starting suspicion for the rest of the day.
 - Walking away is safe but burns the mark for the day. Every bargain costs 25 game-minutes.
@@ -54,7 +56,11 @@ Consumables: Brimstone Espresso (+2 fire tomorrow), Bottled Longing (first barga
 
 ## Meta upgrades (Sin Points)
 
-Forked Tongue (+1 card damage) - Bigger Furnace (+1 fire) - Expense Account (+$3 start) - Night School (Cold Read in deck) - HR Loophole (one missed quota forgiven per run).
+Ten permanent unlocks on a deep cost curve (you grind several runs for the lot): Forked Tongue (+1 card damage) - Bigger Furnace (+1 fire) - Expense Account (+$3 start) - Night School (Cold Read in deck) - Cool Customer (-15% suspicion gain) - Iron Patience (+1 patience) - Connoisseur (+1 coin/soul) - Unholy Charisma (+15% damage) - Sleight of Hand (draw 5) - HR Loophole (one missed quota forgiven per run).
+
+## Antagonist angels (the Exorcist)
+
+A disguised **angel** can be salted into a district's crowd; Demon Vision shows the halo and an ANGEL warning. Pitch one blind and your cover is blown (heavy heat). Flee too many marks — or blow your cover — and the **Exorcist** spawns to stalk you for the rest of the day. Let it catch you and the Boss is summoned regardless of quota: the run ends. Reach the manhole to escape.
 
 ## What's in this slice
 

@@ -52,5 +52,13 @@ export function genNpcs(run: RunState, district: DistrictDef): NpcDef[] {
       skin: rng.pick(SKIN_TONES),
     });
   }
+
+  // One disguised angel may be hiding in the crowd; Demon Vision shows the
+  // halo. Pitch one blind and it blows your cover. Likelier in rougher districts.
+  const angelChance = 0.18 + district.danger * 0.08;
+  if (out.length && rng.chance(angelChance)) {
+    out[rng.int(0, out.length - 1)].isAngel = true;
+  }
+
   return out;
 }
