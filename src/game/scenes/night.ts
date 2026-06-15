@@ -42,7 +42,12 @@ export class NightScene implements GScene {
         c.audio.play('door');
         this.run.day += 1;
         startDay(this.run);
-        c.scenes.replace(c, new CityMapScene(this.run));
+        c.transition.go(c, (cc) => cc.scenes.replace(cc, new CityMapScene(this.run)), {
+          kind: 'rise',
+          label: 'DAWN',
+          sub: `DAY ${this.run.day}`,
+          color: UI.gold,
+        });
         return;
       }
       const item = this.items[this.sel];

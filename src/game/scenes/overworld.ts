@@ -2,12 +2,12 @@ import { Rng } from '../../engine/rng';
 import type { GameCtx, GScene } from '../ctx';
 import { ARCHETYPES } from '../data/archetypes';
 import { DISTRICTS, isWalkable, MAP_H, MAP_W, type DistrictId } from '../data/districts';
-import { AURAS, buildCharacter, CHAR_H, HORNS, PLAYER_PALETTE, type CharSprites } from '../data/sprites/chars';
+import { AURAS, buildCharacter, CHAR_H, HORNS, PLAYER_PALETTE, SATAN, type CharSprites } from '../data/sprites/chars';
 import { buildTileSet, TILE, type TileSet } from '../data/sprites/tiles';
 import type { RevealState } from '../sim/bargain';
 import { genNpcs } from '../sim/npcgen';
 import { aurasVisible, clockRate, endDayOutcome, quotaFor, scanCosts, soulPayout } from '../sim/run';
-import { BARGAIN_TIME_COST, DAY_END_MIN, type NpcDef, type RunState } from '../sim/state';
+import { BARGAIN_TIME_COST, DAY_END_MIN, DAY_START_MIN, type NpcDef, type RunState } from '../sim/state';
 import { BargainScene } from './bargain';
 import { DayEndScene } from './dayend';
 import { drawHintBar, drawTopBar, UI } from './hud';
@@ -391,7 +391,17 @@ export class OverworldScene implements GScene {
 
   private endDay(c: GameCtx): void {
     const outcome = endDayOutcome(this.run, c.meta.state);
-    c.scenes.replace(c, new DayEndScene(this.run, outcome));
+    // On a failed quota the Boss's arrival cinematic is the transition; cut to it.
+    if (outcome === 'satan') {
+      c.scenes.replace(c, new DayEndScene(this.run, outcome));
+      return;
+    }
+    c.transition.go(c, (cc) => cc.scenes.replace(cc, new DayEndScene(this.run, outcome)), {
+      kind: 'descend',
+      label: 'NIGHTFALL',
+      sub: `DAY ${this.run.day}`,
+      color: UI.blue,
+    });
   }
 
   // --- draw ---
@@ -523,6 +533,34 @@ export class OverworldScene implements GScene {
       const frac = Math.min(1, this.holdT / DEEP_SCAN_HOLD);
       r.rect(this.px - 11 - camX, this.py - CHAR_H - 7 - camY, 22, 4, '#0c080c');
       r.rect(this.px - 10 - camX, this.py - CHAR_H - 6 - camY, Math.round(20 * frac), 2, UI.fire);
+    }
+
+    // --- Creepy grade: cold near-black wash, a heavy vignette, the odd
+    // guttering flicker. Center stays legible; the edges close in. ---
+    r.dim(0.17, '#06030e');
+    const bands = 22;
+    for (let i = 0; i < bands; i++) {
+      const a = 0.5 * Math.pow(1 - i / bands, 1.6);
+      r.rect(0, i, r.w, 1, '#000000', a);
+      r.rect(0, r.h - 1 - i, r.w, 1, '#000000', a);
+      r.rect(i, 0, 1, r.h, '#000000', a);
+      r.rect(r.w - 1 - i, 0, 1, r.h, '#000000', a);
+    }
+    const flick = Math.sin(this.t * 6.3) + Math.sin(this.t * 11.7) + Math.sin(this.t * 2.1);
+    if (flick > 2.6) r.dim(0.12, '#000000');
+
+    // Looming dread: the Boss leans down over the street as the clock runs out
+    // with quota unmet. Faint and high so it haunts without blocking play.
+    const dayLen = DAY_END_MIN - DAY_START_MIN;
+    const dayFrac = Math.max(0, Math.min(1, (this.run.timeMin - DAY_START_MIN) / dayLen));
+    const unmet = this.run.soulsToday < quotaFor(this.run);
+    const dread = Math.max(0, Math.min(1, unmet ? dayFrac : dayFrac * 0.25));
+    if (dread > 0.05) {
+      const bob = Math.sin(this.t * 1.1) * 4;
+      const drop = -156 + dread * 64 + bob; // descends as the deadline nears
+      r.sprite(SATAN, r.w / 2 - 96, drop, { scale: 8, alpha: 0.1 + dread * 0.4 });
+      const pulse = 0.04 + dread * (0.1 + Math.sin(this.t * 4) * 0.03);
+      r.dim(Math.max(0, pulse), '#3a0610');
     }
 
     drawTopBar(c, this.run);

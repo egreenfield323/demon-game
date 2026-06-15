@@ -6,6 +6,7 @@ import { createGame, type Game } from '../game/createGame';
 import { BargainScene } from '../game/scenes/bargain';
 import { CityMapScene } from '../game/scenes/citymap';
 import { DayEndScene } from '../game/scenes/dayend';
+import { IntroScene } from '../game/scenes/intro';
 import { OverworldScene } from '../game/scenes/overworld';
 import { PitScene } from '../game/scenes/pit';
 import { RunEndScene } from '../game/scenes/runend';
@@ -15,7 +16,7 @@ import { UPGRADE_LIST } from '../game/data/upgrades';
 
 const STEP = 1 / 60;
 
-function makeGame(): { g: Game; input: Input } {
+function makeGame(seenIntro = true, transitions = false): { g: Game; input: Input } {
   const input = new Input();
   const g = createGame({
     renderer: new NullRenderer(),
@@ -23,8 +24,11 @@ function makeGame(): { g: Game; input: Input } {
     storage: new MemStore(),
     input,
     seedFn: () => 42,
+    transitions, // instant swaps by default so scene assertions are synchronous
   });
   g.start();
+  // Most tests skip the one-time opening cinematic; flip the flag pre-tap.
+  g.ctx.meta.state.seenIntro = seenIntro;
   return { g, input };
 }
 
@@ -49,6 +53,31 @@ describe('headless playthrough', () => {
     const { g, input } = makeGame();
     expect(g.ctx.scenes.top).toBeInstanceOf(TitleScene);
     tap(g, input, 'confirm');
+    expect(g.ctx.scenes.top).toBeInstanceOf(PitScene);
+  });
+
+  it('plays an animated transition between scenes when enabled', () => {
+    const { g, input } = makeGame(true, true); // transitions ON
+    expect(g.ctx.scenes.top).toBeInstanceOf(TitleScene);
+    tap(g, input, 'confirm'); // start the wipe to the pit
+    expect(g.ctx.transition.busy).toBe(true);
+    expect(g.ctx.scenes.top).toBeInstanceOf(TitleScene); // not swapped yet (still covered)
+    step(g, 110); // let the wipe cover, swap, and reveal
+    expect(g.ctx.transition.busy).toBe(false);
+    expect(g.ctx.scenes.top).toBeInstanceOf(PitScene);
+  });
+
+  it('plays the opening cinematic once on a fresh profile', () => {
+    const { g, input } = makeGame(false); // fresh store: intro unseen
+    expect(g.ctx.scenes.top).toBeInstanceOf(TitleScene);
+    tap(g, input, 'confirm'); // title -> intro, not straight to pit
+    expect(g.ctx.scenes.top).toBeInstanceOf(IntroScene);
+    expect(g.ctx.meta.state.seenIntro).toBe(true);
+    // Skip through every beat; the intro hands off to the pit.
+    for (let i = 0; i < 30 && g.ctx.scenes.top instanceof IntroScene; i++) {
+      step(g, 40); // clear the per-beat input gate
+      tap(g, input, 'confirm');
+    }
     expect(g.ctx.scenes.top).toBeInstanceOf(PitScene);
   });
 
@@ -95,6 +124,7 @@ describe('headless playthrough', () => {
     // Pitch them.
     tap(g, input, 'confirm');
     expect(g.ctx.scenes.top).toBeInstanceOf(BargainScene);
+    step(g, 130); // let the battle-intro animation play out
 
     // Play first card until the bargain resolves one way or another.
     for (let i = 0; i < 40 && g.ctx.scenes.top instanceof BargainScene; i++) {
@@ -137,6 +167,7 @@ describe('headless playthrough', () => {
     step(g);
     tap(g, input, 'confirm'); // start bargain
     expect(g.ctx.scenes.top).toBeInstanceOf(BargainScene);
+    step(g, 130); // let the battle-intro animation play out
     tap(g, input, 'cancel'); // walk-away modal
     tap(g, input, 'confirm'); // confirm leave -> terminal overlay
     tap(g, input, 'confirm'); // dismiss

@@ -1,5 +1,6 @@
 import type { GameCtx, GScene } from '../ctx';
 import { UI } from './hud';
+import { IntroScene } from './intro';
 import { PitScene } from './pit';
 
 export class TitleScene implements GScene {
@@ -9,7 +10,24 @@ export class TitleScene implements GScene {
     this.t += dt;
     if (c.input.hit('confirm')) {
       c.audio.play('confirm');
-      c.scenes.replace(c, new PitScene());
+      if (!c.meta.state.seenIntro) {
+        c.meta.markIntroSeen();
+        c.scenes.replace(
+          c,
+          new IntroScene((cc) =>
+            cc.transition.go(cc, (x) => x.scenes.replace(x, new PitScene()), {
+              kind: 'rise',
+              label: 'THE ORIENTATION PIT',
+            }),
+          ),
+        );
+      } else {
+        c.transition.go(c, (cc) => cc.scenes.replace(cc, new PitScene()), { kind: 'rise', label: 'THE ORIENTATION PIT' });
+      }
+    } else if (c.input.hit('vision')) {
+      // Replay the backstory; return here when it ends.
+      c.audio.play('confirm');
+      c.scenes.push(c, new IntroScene((cc) => cc.scenes.pop()));
     }
   }
 
@@ -43,6 +61,7 @@ export class TitleScene implements GScene {
     if (Math.floor(this.t * 1.6) % 2 === 0) {
       r.text('PRESS [ENTER] TO CLOCK IN', r.w / 2, 205, UI.gold, { align: 'center' });
     }
+    r.text('[V] THE STORY OF HOW YOU GOT THIS JOB', r.w / 2, 222, UI.dim, { align: 'center' });
     r.text('MOVE: WASD/ARROWS  TALK: E  VISION: V  BACK: ESC', r.w / 2, 245, '#6a5a60', { align: 'center' });
   }
 }

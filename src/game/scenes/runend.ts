@@ -28,7 +28,10 @@ export class RunEndScene implements GScene {
     this.t += dt;
     if (this.t > 0.5 && c.input.hit('confirm')) {
       c.audio.play('confirm');
-      c.scenes.reset(c, new PitScene());
+      c.transition.go(c, (cc) => cc.scenes.reset(cc, new PitScene()), {
+        kind: 'rise',
+        label: 'THE ORIENTATION PIT',
+      });
     }
   }
 

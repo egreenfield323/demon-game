@@ -5,7 +5,7 @@ import { endDayOutcome, newRun, quotaFor, sinPointsFor, startDay } from '../game
 import { buyItem, genShop } from '../game/sim/shop';
 import { DAY_COUNT, type MetaState } from '../game/sim/state';
 
-const plainMeta = (): MetaState => ({ sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0 });
+const plainMeta = (): MetaState => ({ sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0, seenIntro: true });
 
 describe('run lifecycle', () => {
   it('applies meta upgrades to a fresh run', () => {

@@ -1,0 +1,472 @@
+import { makeSprite, type Sprite } from '../../../engine/types';
+import { KEYWORD_COLORS, type Keyword } from '../keywords';
+
+/** 8x8 pictographs stamped onto the art panel of a dialogue card. One per
+ * hunger, plus a handful for the utility lines. Color is baked per icon. */
+
+const UI_GOLD = '#e8c84a';
+const UI_BLUE = '#6ac8e8';
+const UI_ACCENT = '#e85a4a';
+const UI_DIM = '#b8a6ae';
+
+function icon(grid: string[], color: string, id: string): Sprite {
+  return makeSprite(grid, { x: color }, `cardicon-${id}`);
+}
+
+const KEY_GRIDS: Record<Keyword, string[]> = {
+  WEALTH: [
+    '.xxxxxx.',
+    'xx....xx',
+    'x.xxxx.x',
+    'x.x..x.x',
+    'x.x..x.x',
+    'x.xxxx.x',
+    'xx....xx',
+    '.xxxxxx.',
+  ],
+  LOVE: [
+    '.xx..xx.',
+    'xxxxxxxx',
+    'xxxxxxxx',
+    'xxxxxxxx',
+    '.xxxxxx.',
+    '..xxxx..',
+    '...xx...',
+    '........',
+  ],
+  FAME: [
+    '...xx...',
+    '...xx...',
+    '.xxxxxx.',
+    'xxxxxxxx',
+    '.xxxxxx.',
+    '.xx..xx.',
+    'xx....xx',
+    '........',
+  ],
+  POWER: [
+    'x..xx..x',
+    'x.xxxx.x',
+    'xxxxxxxx',
+    'xxxxxxxx',
+    'xxxxxxxx',
+    'xxxxxxxx',
+    '........',
+    '........',
+  ],
+  COMFORT: [
+    '..xxxx..',
+    '.xx.....',
+    'xx......',
+    'xx......',
+    'xx......',
+    '.xx.....',
+    '..xxxx..',
+    '........',
+  ],
+  LEGACY: [
+    '.xxxxxx.',
+    'xxxxxxxx',
+    '..xxxx..',
+    '..xxxx..',
+    '..xxxx..',
+    '..xxxx..',
+    '.xxxxxx.',
+    'xxxxxxxx',
+  ],
+  ESCAPE: [
+    '....x...',
+    '....xx..',
+    'xxxxxxx.',
+    'xxxxxxxx',
+    'xxxxxxx.',
+    '....xx..',
+    '....x...',
+    '........',
+  ],
+};
+
+/** Utility-card glyphs, keyed by a logical icon id. */
+const UTIL_GRIDS: Record<string, [string[], string]> = {
+  speech: [
+    [
+      'xxxxxxx.',
+      'x.....x.',
+      'x.....x.',
+      'x.....x.',
+      'xxxxxxx.',
+      '.xx.....',
+      'x.......',
+      '........',
+    ],
+    UI_DIM,
+  ],
+  eye: [
+    [
+      '........',
+      '.xxxxxx.',
+      'xx.xx.xx',
+      'x.xxxx.x',
+      'xx.xx.xx',
+      '.xxxxxx.',
+      '........',
+      '........',
+    ],
+    UI_BLUE,
+  ],
+  calm: [
+    [
+      '........',
+      'xx....x.',
+      '..x..x.x',
+      '...xx...',
+      'x.x..x..',
+      '.x....xx',
+      '........',
+      '........',
+    ],
+    UI_BLUE,
+  ],
+  contract: [
+    [
+      'xxxxxx..',
+      'x....x..',
+      'x.xx.x..',
+      'x....x..',
+      'x.xx.x..',
+      'x....xx.',
+      'x.....x.',
+      'xxxxxxx.',
+    ],
+    UI_GOLD,
+  ],
+  drop: [
+    [
+      '...x....',
+      '...x....',
+      '..xxx...',
+      '..xxx...',
+      '.xxxxx..',
+      '.xxxxx..',
+      '..xxx...',
+      '........',
+    ],
+    UI_GOLD,
+  ],
+  advocate: [
+    [
+      '.xxxxxx.',
+      'x.x..x.x',
+      'x.x..x.x',
+      'x......x',
+      'x.xxxx.x',
+      '.x....x.',
+      '..xxxx..',
+      '........',
+    ],
+    UI_ACCENT,
+  ],
+};
+
+export const KEYWORD_ICONS: Record<Keyword, Sprite> = Object.fromEntries(
+  (Object.keys(KEY_GRIDS) as Keyword[]).map((k) => [k, icon(KEY_GRIDS[k], KEYWORD_COLORS[k], k)]),
+) as Record<Keyword, Sprite>;
+
+export const UTIL_ICONS: Record<string, Sprite> = Object.fromEntries(
+  Object.entries(UTIL_GRIDS).map(([id, [grid, color]]) => [id, icon(grid, color, id)]),
+);
+
+/** 16x16 central illustrations — the "creepy art" on each card face. Each one
+ * leans morbid: the hunger as a memento mori. Multi-shade palettes. */
+
+const ART: Record<string, [string[], Record<string, string>]> = {
+  // WEALTH — a gilded skull.
+  WEALTH: [
+    [
+      '................',
+      '....xxxxxxxx....',
+      '..xxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxkkxxxxxxkkxx.',
+      '.xxkkxxxxxxkkxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '..xxxxxxxxxxxx..',
+      '..xkxkxkxkxkxx..',
+      '..xkxkxkxkxkxx..',
+      '...xxxxxxxxxx...',
+      '................',
+      '................',
+    ],
+    { x: '#e8c84a', k: '#5a4010' },
+  ],
+  // LOVE — a bleeding heart.
+  LOVE: [
+    [
+      '................',
+      '..xxxx....xxxx..',
+      '.xxxxxx..xxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '..xxxxxxxxxxxx..',
+      '...xxxxxxxxxx...',
+      '....xxxxxxxx....',
+      '.....xxxxxx.....',
+      '......xxxx......',
+      '.......xx.......',
+      '.......kk.......',
+      '......kk........',
+      '.....kk.........',
+      '................',
+    ],
+    { x: '#e86a8a', k: '#7a1430' },
+  ],
+  // FAME — a hollow theatre mask.
+  FAME: [
+    [
+      '................',
+      '..xxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxxx.',
+      '.xxkkxxxxxxkkxx.',
+      '.xxkkxxxxxxkkxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '..xxxkkkkkkxxx..',
+      '...xxxxxxxxxx...',
+      '....xxxxxxxx....',
+      '.....x....x.....',
+      '....x......x....',
+      '...x........x...',
+      '................',
+      '................',
+    ],
+    { x: '#b06ae8', k: '#2a1040' },
+  ],
+  // POWER — a grasping clawed hand.
+  POWER: [
+    [
+      '.x..x..x..x.....',
+      '.x..x..x..x..x..',
+      '.x..x..x..x..x..',
+      '.xx.x..x..x.xx..',
+      '.xxxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxx..',
+      '..xxxxxxxxxxx...',
+      '..xxxxxxxxxxx...',
+      '...xxxxxxxxx....',
+      '....xxxxxxx.....',
+      '.....xxxxx......',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+    { x: '#e8604a', k: '#5a1410' },
+  ],
+  // COMFORT — a coffin, cross inlaid.
+  COMFORT: [
+    [
+      '....xxxxxxxx....',
+      '...xxxxxxxxxx...',
+      '..xxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxkkkkkkkkxxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxxxxkkxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '..xxxxxxxxxxxx..',
+      '...xxxxxxxxxx...',
+      '....xxxxxxxx....',
+      '................',
+    ],
+    { x: '#6ac8e8', k: '#143a48' },
+  ],
+  // LEGACY — a graveside headstone.
+  LEGACY: [
+    [
+      '................',
+      '...xxxxxxxxxx...',
+      '..xxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxkkkkkkkkkkxx.',
+      '.xxkxxxxxxxxkxx.',
+      '.xxkxkkkkkkxkxx.',
+      '.xxkxxxxxxxxkxx.',
+      '.xxkkkkkkkkkkxx.',
+      '.xxxxxxxxxxxxxx.',
+      '.xxxxxxxxxxxxxx.',
+      'xxxxxxxxxxxxxxxx',
+      'xxxxxxxxxxxxxxxx',
+      '................',
+      '................',
+    ],
+    { x: '#8ae86a', k: '#1a4a20' },
+  ],
+  // ESCAPE — a door opening onto the dark.
+  ESCAPE: [
+    [
+      '...xxxxxxxxxx...',
+      '..xxxxxxxxxxxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkklkxx..',
+      '..xxkkkkkklkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxkkkkkkkkxx..',
+      '..xxxxxxxxxxxx..',
+      '..xxxxxxxxxxxx..',
+      '................',
+    ],
+    { x: '#e8a96a', k: '#0a0608', l: '#fff0c0' },
+  ],
+  // Utility art ----------------------------------------------------------
+  eye: [
+    [
+      '................',
+      '................',
+      '...xxxxxxxxxx...',
+      '.xxxxxxxxxxxxxx.',
+      'xxxxkkkkkkkkxxxx',
+      'xxkkkrrrrrrkkkxx',
+      'xkkrrrrrrrrrrkkx',
+      'xkkrrrkkkkrrrkkx',
+      'xkkrrrkkkkrrrkkx',
+      'xkkrrrrrrrrrrkkx',
+      'xxkkkrrrrrrkkkxx',
+      'xxxxkkkkkkkkxxxx',
+      '.xxxxxxxxxxxxxx.',
+      '...xxxxxxxxxx...',
+      '................',
+      '................',
+    ],
+    { x: '#6ac8e8', k: '#0a1a22', r: '#c83a2a' },
+  ],
+  scroll: [
+    [
+      '................',
+      '.xxxxxxxxxxxxxx.',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xxxxxxxxxxxxxxxx',
+      '.xxxxxxxxxxxxxx.',
+      '................',
+      '................',
+    ],
+    { x: '#e8c84a', k: '#5a4010' },
+  ],
+  mouth: [
+    [
+      '................',
+      '................',
+      '..xxxxxxxxxxxx..',
+      '.xxxxxxxxxxxxxx.',
+      'xxxxxxxxxxxxxxxx',
+      'xkxkxkxkxkxkxkxx',
+      'xxxxxxxxxxxxxxxx',
+      'xxxxxxxxxxxxxxxx',
+      'xkxkxkxkxkxkxkxx',
+      'xxxxxxxxxxxxxxxx',
+      '.xxxxxxxxxxxxxx.',
+      '..xxxxxxxxxxxx..',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+    { x: '#c0a6ae', k: '#1a0e14' },
+  ],
+  drop: [
+    [
+      '.......xx.......',
+      '.......xx.......',
+      '......xxxx......',
+      '......xxxx......',
+      '.....xxxxxx.....',
+      '....xxxxxxxx....',
+      '...xxxxxxxxxx...',
+      '..xxxxxxxxxxxx..',
+      '..xxxxxxxxxxxx..',
+      '..xxxllxxxxxxx..',
+      '..xxllxxxxxxxx..',
+      '...xxxxxxxxxx...',
+      '....xxxxxxxx....',
+      '.....xxxxxx.....',
+      '................',
+      '................',
+    ],
+    { x: '#e8c84a', k: '#5a4010', l: '#fff0c0' },
+  ],
+  calm: [
+    [
+      '................',
+      '................',
+      '................',
+      '................',
+      '...xxxxxxxxxx...',
+      '.xxxxxxxxxxxxxx.',
+      'xxxxxxxxxxxxxxxx',
+      'xxkkkkkkkkkkkkxx',
+      'xkxkxkxkxkxkxkxx',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+    { x: '#6ac8e8', k: '#143a48' },
+  ],
+};
+
+export const CARD_ART: Record<string, Sprite> = Object.fromEntries(
+  Object.entries(ART).map(([id, [grid, pal]]) => [id, makeSprite(grid, pal, `cardart-${id}`)]),
+);
+
+/** Face-down card — an occult sigil shown while a card is dealt, before it
+ * flips up. */
+export const CARD_BACK: Sprite = makeSprite(
+  [
+    'bbbbbbbbbbbbbbbb',
+    'bddddddddddddddb',
+    'bdbbbbbbbbbbbbdb',
+    'bdbddddddddddbdb',
+    'bdbdrrrrrrrrdbdb',
+    'bdbdrddddddrdbdb',
+    'bdbdrdrrrrdrdbdb',
+    'bdbdrdrddrdrdbdb',
+    'bdbdrdrddrdrdbdb',
+    'bdbdrdrrrrdrdbdb',
+    'bdbdrddddddrdbdb',
+    'bdbdrrrrrrrrdbdb',
+    'bdbddddddddddbdb',
+    'bdbbbbbbbbbbbbdb',
+    'bddddddddddddddb',
+    'bbbbbbbbbbbbbbbb',
+  ],
+  { b: '#7a6a52', d: '#160c14', r: '#9a1824' },
+  'cardback',
+);

@@ -42,6 +42,8 @@ export interface MetaState {
   wins: number;
   soulsAllTime: number;
   bestDay: number;
+  /** Whether the player has watched the opening cinematic. */
+  seenIntro: boolean;
 }
 
 export interface NpcDef {

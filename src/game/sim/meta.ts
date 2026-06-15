@@ -5,7 +5,7 @@ import type { MetaState } from './state';
 const KEY = 'soul-quota-meta-v1';
 
 function freshMeta(): MetaState {
-  return { sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0 };
+  return { sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0, seenIntro: false };
 }
 
 /** Persistent progression: Sin Points and permanent unlocks. */
@@ -37,6 +37,12 @@ export class MetaStore {
 
   has(u: UpgradeId): boolean {
     return this.state.upgrades.includes(u);
+  }
+
+  markIntroSeen(): void {
+    if (this.state.seenIntro) return;
+    this.state.seenIntro = true;
+    this.save();
   }
 
   buyUpgrade(u: UpgradeId): boolean {

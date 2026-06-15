@@ -5,7 +5,7 @@ import { genNpcs } from '../game/sim/npcgen';
 import { newRun } from '../game/sim/run';
 import type { MetaState } from '../game/sim/state';
 
-const meta: MetaState = { sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0 };
+const meta: MetaState = { sinPoints: 0, upgrades: [], runs: 0, wins: 0, soulsAllTime: 0, bestDay: 0, seenIntro: true };
 
 describe('district maps', () => {
   for (const id of DISTRICT_LIST) {

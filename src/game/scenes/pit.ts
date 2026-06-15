@@ -2,6 +2,7 @@ import type { GameCtx, GScene } from '../ctx';
 import { SATAN } from '../data/sprites/chars';
 import { UPGRADES, UPGRADE_LIST } from '../data/upgrades';
 import { newRun } from '../sim/run';
+import { DAY_COUNT } from '../sim/state';
 import { CityMapScene } from './citymap';
 import { drawHintBar, drawPanel, UI } from './hud';
 
@@ -27,7 +28,13 @@ export class PitScene implements GScene {
     if (c.input.hit('confirm')) {
       if (this.sel === this.entries - 1) {
         c.audio.play('satan');
-        c.scenes.replace(c, new CityMapScene(newRun(c.meta.state, c.newSeed())));
+        const run = newRun(c.meta.state, c.newSeed());
+        c.transition.go(c, (cc) => cc.scenes.replace(cc, new CityMapScene(run)), {
+          kind: 'rise',
+          label: 'CLOCK IN',
+          sub: `DAY ${run.day} OF ${DAY_COUNT}`,
+          color: UI.gold,
+        });
       } else {
         const id = UPGRADE_LIST[this.sel];
         if (c.meta.has(id)) {

@@ -24,6 +24,7 @@ export class DayEndScene implements GScene {
   update(c: GameCtx, dt: number): void {
     this.t += dt;
     if (this.outcome === 'satan') {
+      // The run-end review is its own cinematic; cut straight to it.
       if (this.t > 3 && c.input.hit('confirm')) {
         c.scenes.replace(c, new RunEndScene(this.run, false));
       }
@@ -34,7 +35,11 @@ export class DayEndScene implements GScene {
       if (this.run.day >= DAY_COUNT) {
         c.scenes.replace(c, new RunEndScene(this.run, true));
       } else {
-        c.scenes.replace(c, new NightScene(this.run));
+        c.transition.go(c, (cc) => cc.scenes.replace(cc, new NightScene(this.run)), {
+          kind: 'descend',
+          label: 'THE COMMISSARY',
+          color: UI.blue,
+        });
       }
     }
   }

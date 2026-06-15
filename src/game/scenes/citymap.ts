@@ -22,7 +22,13 @@ export class CityMapScene implements GScene {
     }
     if (c.input.hit('confirm')) {
       c.audio.play('door');
-      c.scenes.replace(c, new OverworldScene(this.run, DISTRICT_LIST[this.sel]));
+      const id = DISTRICT_LIST[this.sel];
+      c.transition.go(c, (cc) => cc.scenes.replace(cc, new OverworldScene(this.run, id)), {
+        kind: 'curtain',
+        label: DISTRICTS[id].name.toUpperCase(),
+        sub: `DAY ${this.run.day}`,
+        color: UI.gold,
+      });
     }
   }
 
