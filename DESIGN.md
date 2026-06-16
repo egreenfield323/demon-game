@@ -6,16 +6,18 @@ A low-level demon on his last warning is sent to the land of the living to close
 
 ## The run (roguelike frame)
 
-- A run is a 7-day work week. Quotas: **1, 1, 2, 2, 3, 3, 4** souls.
-- Lose: miss a quota → Satan cinematic → run over. Win: survive day 7.
-- Either way you bank **Sin Points** = souls + 2x days completed (+10 for a win), spent in the Orientation Pit on permanent upgrades.
-- Each morning you choose 1 of 3 districts; you're committed for the day ("the bus only runs at dawn").
+- A run is a 7-day work week. Quotas: **1, 1, 2, 2, 3, 3, 4** souls (+1 per loop).
+- Lose: miss a quota → Satan cinematic → run over. Survive day 7 → **bank** (run over, win) **or loop**: sign on for another week, harder and richer, escalating until you fail or finally bank.
+- You bank **Sin Points** = souls + 2× days survived (across loops) (+10 for a banked win), spent in the Orientation Pit on permanent upgrades.
+- **You no longer pick the ground.** Each dawn drops you into a random world (never the same two days running). A single **difficulty** scalar = day across loops scales every mark's willpower/suspicion *and* the delivery-meter speed. Worlds differ only in flavor — their crowd and their **softness** (how easily the locals fall) — and coins are a flat random payout, so there's no "money district" to farm.
 
-| District | Danger | Pool | Profile |
-| --- | --- | --- | --- |
-| Murkwell Commons | * | widow, retiree, nurse, artist | low willpower, low value ($1-2), forgiving |
-| The Stoop | ** | barfly, artist, nurse, founder | erratic (DRUNK quirks), cheap souls, trusting |
-| Gildport Financial | *** | analyst, cryptobro, founder, retiree | high willpower + suspicion, souls worth $2-3 |
+| World | Crowd | Flavor |
+| --- | --- | --- |
+| Murkwell Commons (park) | widow, retiree, nurse, artist | gentle, lonely, easily moved |
+| The Stoop (dive street) | barfly, artist, nurse, founder | erratic (DRUNK), trusting |
+| Gildport Financial (towers) | analyst, cryptobro, founder, retiree | guarded, high willpower |
+| The Hollow (old woods) | widow, retiree, barfly, artist | primal, superstitious, **gullible** (softest) |
+| Tidewater Pier (marina) | artist, founder, cryptobro, nurse | dreamers; a tidal channel blocks the way — only the dock crosses |
 
 ## Demon Vision as a resource
 
@@ -33,7 +35,7 @@ Their **Willpower** is the shield; **Suspicion** is a tight alarm (cap **50**); 
 - Keyword multipliers: Desire **3x** / trait affinity **1.75x** / neutral 1x / Ick **0x + 6 bonus suspicion + OFFENDED**.
 - **Rapport (combo)**: each resonant line (desire/trait) builds momentum (+2/+1, cap 5) that amplifies damage (+15%/point) **but also ramps the suspicion each appeal generates (+16%/point)** — chaining is a race to close before the alarm trips, not free speed. A misread, an Ick, or a neutral line snaps the chain to 0. **Setup→payoff**: Small Talk primes the next line (+6 dmg); The Fine Print scales +2 dmg per Rapport.
 - **Patience** is a firm turn budget (−1/turn, Ick −2). The only regain is hard-earned: a Desire hit landed while the chain is already hot (combo 4+) makes them lean in and skips the turn cost.
-- **Delivery meter (active input)**: choosing a line doesn't auto-play it. A marker sweeps **SUBTLE↔BOLD** and you stop it. Bold = harder hit, more suspicion; subtle = softer, safer. A small **sweet spot** (placed fresh each time — pure read-and-react) crits: big damage *and* they stay calm. You judge how to play it from the board, then have to land the timing — every line is an actual decision + input, never a one-click reflex.
+- **Delivery meter (active input)**: choosing a line doesn't auto-play it. A marker sweeps **SUBTLE↔BOLD** and you stop it. Bold = harder hit, more suspicion; subtle = softer, safer. A small **sweet spot** (placed fresh each time — pure read-and-react) crits: big damage *and* they stay calm. You judge how to play it from the board, then have to land the timing. **The meter sweeps faster as the run's difficulty climbs.**
 - Suspicion gain = card cost x their suspicion rate, x1.5 if DEVOUT, x1.5 while WARY.
 - **Moods**: big hits (12+) can make them RECEPTIVE (+25% damage); 30+ suspicion risks WARY; Icks cause OFFENDED (-25% damage, next turn).
 - Quirks: **SKEPTIC** halves keyword bonuses, **DRUNK** is -15% willpower but ±40% damage variance, **DEVOUT** as above.
@@ -57,7 +59,7 @@ Consumables: Brimstone Espresso (+2 fire tomorrow), Bottled Longing (first barga
 
 ## Meta upgrades (Sin Points)
 
-Ten permanent unlocks on a deep cost curve (you grind several runs for the lot): Forked Tongue (+1 card damage) - Bigger Furnace (+1 fire) - Expense Account (+$3 start) - Night School (Cold Read in deck) - Cool Customer (-15% suspicion gain) - Iron Patience (+1 patience) - Connoisseur (+1 coin/soul) - Unholy Charisma (+15% damage) - Sleight of Hand (draw 5) - HR Loophole (one missed quota forgiven per run).
+Eleven permanent unlocks on a deep cost curve (you grind several runs for the lot): Forked Tongue (+1 card damage) - Bigger Furnace (+1 fire) - Expense Account (+$3 start) - Night School (Cold Read in deck) - Cool Customer (-15% suspicion gain) - Iron Patience (+1 patience) - Connoisseur (+1 coin/soul) - Unholy Charisma (+15% damage) - Sleight of Hand (draw 5) - **Steady Hand** (delivery sweet spot shrinks, but crits hit far harder; a miss adds +25% suspicion) - HR Loophole (one missed quota forgiven per run).
 
 ## Antagonist angels (the Exorcist)
 

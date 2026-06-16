@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemStore } from '../engine/types';
 import { MetaStore } from '../game/sim/meta';
-import { endDayOutcome, newRun, quotaFor, sinPointsFor, startDay } from '../game/sim/run';
+import { advanceWorld, daysSurvived, endDayOutcome, meterSpeedFor, newRun, quotaFor, runDifficulty, sinPointsFor, startDay } from '../game/sim/run';
 import { buyItem, genShop } from '../game/sim/shop';
 import { DAY_COUNT, type MetaState } from '../game/sim/state';
 
@@ -25,6 +25,28 @@ describe('run lifecycle', () => {
     expect(quotaFor(run)).toBe(4);
     run.charms.push('first-lie-quill');
     expect(quotaFor(run)).toBe(5);
+  });
+
+  it('looping raises difficulty, quota, meter speed, and counts days', () => {
+    const run = newRun(plainMeta(), 5);
+    const q1 = quotaFor(run);
+    const s1 = meterSpeedFor(run);
+    run.day = DAY_COUNT;
+    expect(meterSpeedFor(run)).toBeGreaterThan(s1); // faster as the week wears on
+    run.loop = 2;
+    run.day = 1;
+    expect(quotaFor(run)).toBe(q1 + 1); // each loop raises the bar
+    expect(runDifficulty(run)).toBe(DAY_COUNT + 1);
+    run.day = 3;
+    expect(daysSurvived(run, false)).toBe(DAY_COUNT + 2);
+  });
+
+  it('the ground changes each day and never repeats back-to-back', () => {
+    const run = newRun(plainMeta(), 5);
+    const first = run.world;
+    run.day = 2;
+    advanceWorld(run);
+    expect(run.world).not.toBe(first);
   });
 
   it('consumables and the opal shape the morning fire', () => {

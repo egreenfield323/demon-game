@@ -1,6 +1,6 @@
 import type { GameCtx, GScene } from '../ctx';
-import { sinPointsFor } from '../sim/run';
-import { DAY_COUNT, type RunState } from '../sim/state';
+import { daysSurvived, sinPointsFor } from '../sim/run';
+import { type RunState } from '../sim/state';
 import { drawHintBar, drawPanel, UI } from './hud';
 import { PitScene } from './pit';
 
@@ -17,7 +17,7 @@ export class RunEndScene implements GScene {
     this.sin = sinPointsFor(this.run, this.won);
     c.meta.recordRun({
       souls: this.run.totalSouls,
-      daysCompleted: this.won ? DAY_COUNT : this.run.day - 1,
+      daysCompleted: daysSurvived(this.run, this.won),
       won: this.won,
       sinEarned: this.sin,
     });
@@ -47,9 +47,9 @@ export class RunEndScene implements GScene {
     r.text(sub, r.w / 2, 70, UI.text, { align: 'center' });
 
     drawPanel(c, 140, 92, 200, 110, 'PERFORMANCE REVIEW');
-    const days = this.won ? DAY_COUNT : this.run.day - 1;
+    const days = daysSurvived(this.run, this.won);
     const lines: Array<[string, string, string]> = [
-      ['DAYS SURVIVED', `${days} / ${DAY_COUNT}`, UI.text],
+      ['DAYS SURVIVED', this.run.loop > 1 ? `${days} (loop ${this.run.loop})` : `${days}`, UI.text],
       ['SOULS HARVESTED', `${this.run.totalSouls}`, UI.text],
       ['COMMISSION LEFT', `$${this.run.coins}`, UI.gold],
       ['SIN POINTS EARNED', `+${this.sin}`, UI.accent],

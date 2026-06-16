@@ -206,6 +206,20 @@ describe('soul bargain', () => {
     expect(ec.find((e) => e.kind === 'susp')!.amount!).toBeLessThan(en.find((e) => e.kind === 'susp')!.amount!);
   });
 
+  it('steady hand: crits hit harder, but a flubbed line is more suspicious', () => {
+    const plain = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const precise = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 }, { precise: true });
+    const cp = playCard(plain, 0, { boldness: 0.5, crit: true }).find((e) => e.kind === 'dmg')!.amount!;
+    const cs = playCard(precise, 0, { boldness: 0.5, crit: true }).find((e) => e.kind === 'dmg')!.amount!;
+    expect(cs).toBeGreaterThan(cp); // precise crit is bigger
+
+    const missPlain = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
+    const missPrecise = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 }, { precise: true });
+    const sp = playCard(missPlain, 0, { boldness: 0.5, crit: false }).find((e) => e.kind === 'susp')!.amount!;
+    const ss = playCard(missPrecise, 0, { boldness: 0.5, crit: false }).find((e) => e.kind === 'susp')!.amount!;
+    expect(ss).toBeGreaterThan(sp); // a miss costs more suspicion
+  });
+
   it('a neutral delivery matches no delivery at all', () => {
     const a = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });
     const b = start(Array(9).fill('love-1') as CardId[], { maxWillpower: 999 });

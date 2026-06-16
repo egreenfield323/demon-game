@@ -92,6 +92,9 @@ export class BargainScene implements GScene {
   /** Active delivery meter: a marker sweeping SUBTLE..BOLD that the player
    * stops to set how the readied line lands. */
   private delivery: { idx: number; pos: number; dir: number; sweetLo: number; sweetHi: number } | null = null;
+  /** Sweep speed (higher = harder world); sweet-spot width (smaller if precise). */
+  private meterSpeed: number;
+  private sweetWidth: number;
   private log: LogLine[] = [];
   private npcLine: string;
   private floats: Floater[] = [];
@@ -112,6 +115,8 @@ export class BargainScene implements GScene {
     private onDone: (st: BargainState) => void,
   ) {
     this.st = startBargain(opts);
+    this.meterSpeed = opts.meterSpeed ?? DELIVERY_SPEED;
+    this.sweetWidth = this.st.precise ? 0.07 : 0.13;
     const arch = ARCHETYPES[opts.npc.archetype];
     this.npcLine = `${opts.npc.name} sizes you up.`;
     this.log.push({ text: `You corner ${opts.npc.name}, ${arch.label}.`, color: UI.dim });
@@ -294,7 +299,7 @@ export class BargainScene implements GScene {
     // --- Delivery meter: the marker sweeps; confirm stops it and speaks. ---
     if (this.delivery) {
       const m = this.delivery;
-      m.pos += m.dir * DELIVERY_SPEED * dt;
+      m.pos += m.dir * this.meterSpeed * dt;
       if (m.pos >= 1) {
         m.pos = 1;
         m.dir = -1;
@@ -336,7 +341,7 @@ export class BargainScene implements GScene {
       }
       // Begin the delivery meter for the chosen line. The sweet spot is placed
       // fresh each time, so it's pure read-and-react, never memorized.
-      const w = 0.13;
+      const w = this.sweetWidth;
       const lo = 0.08 + Math.random() * (0.92 - 0.08 - w);
       this.delivery = { idx: this.sel, pos: 0, dir: 1, sweetLo: lo, sweetHi: lo + w };
       c.audio.play('confirm');

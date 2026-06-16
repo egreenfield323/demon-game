@@ -11,6 +11,7 @@ export type UpgradeId =
   | 'connoisseur'
   | 'unholy-charisma'
   | 'extra-hand'
+  | 'steady-hand'
   | 'hr-loophole';
 
 export interface UpgradeDef {
@@ -75,6 +76,12 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     cost: 15,
     desc: 'Draw a hand of 5 lines instead of 4.',
   },
+  'steady-hand': {
+    id: 'steady-hand',
+    name: 'Steady Hand',
+    cost: 13,
+    desc: 'Delivery sweet spot shrinks, but crits hit far harder. A miss adds +25% suspicion.',
+  },
   'hr-loophole': {
     id: 'hr-loophole',
     name: 'HR Loophole',
@@ -93,5 +100,6 @@ export const UPGRADE_LIST: UpgradeId[] = [
   'connoisseur',
   'unholy-charisma',
   'extra-hand',
+  'steady-hand',
   'hr-loophole',
 ];

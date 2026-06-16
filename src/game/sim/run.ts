@@ -1,4 +1,6 @@
+import { Rng } from '../../engine/rng';
 import { STARTING_DECK } from '../data/cards';
+import { pickWorld } from '../data/districts';
 import type { MetaState, NpcDef, RunState } from './state';
 import { DAY_COUNT, DAY_START_MIN, MIN_PER_SEC, QUOTAS } from './state';
 
@@ -9,6 +11,8 @@ export function newRun(meta: MetaState, seed: number): RunState {
   const run: RunState = {
     seed,
     day: 1,
+    loop: 1,
+    world: pickWorld(new Rng(`world:${seed}:1:1`)),
     coins: meta.upgrades.includes('expense-account') ? 3 : 0,
     soulsToday: 0,
     totalSouls: 0,
@@ -26,8 +30,24 @@ export function newRun(meta: MetaState, seed: number): RunState {
   return run;
 }
 
+/** Roll the next day's hunting ground (avoiding an immediate repeat). */
+export function advanceWorld(run: RunState): void {
+  run.world = pickWorld(new Rng(`world:${run.seed}:${run.loop}:${run.day}`), run.world);
+}
+
+/** A single rising scalar (day across loops) that scales every world. */
+export function runDifficulty(run: RunState): number {
+  return (run.loop - 1) * DAY_COUNT + run.day;
+}
+
+/** How fast the delivery meter sweeps — faster as the run gets harder. */
+export function meterSpeedFor(run: RunState): number {
+  return 1.5 * (1 + (runDifficulty(run) - 1) * 0.06);
+}
+
 export function quotaFor(run: RunState): number {
   let q = QUOTAS[run.day - 1] ?? QUOTAS[QUOTAS.length - 1];
+  q += run.loop - 1; // each loop raises the bar
   if (run.charms.includes('first-lie-quill') && run.day === DAY_COUNT) q += 1;
   return q;
 }
@@ -75,7 +95,12 @@ export function aurasVisible(run: RunState): boolean {
   return !run.charms.includes('hagstone-monocle');
 }
 
+/** Total days survived across every loop (for scoring + the review screen). */
+export function daysSurvived(run: RunState, won: boolean): number {
+  return (run.loop - 1) * DAY_COUNT + (won ? DAY_COUNT : run.day - 1);
+}
+
 export function sinPointsFor(run: RunState, won: boolean): number {
-  const daysCompleted = won ? DAY_COUNT : run.day - 1;
-  return run.totalSouls + 2 * daysCompleted + (won ? 10 : 0);
+  const days = daysSurvived(run, won);
+  return run.totalSouls + 2 * days + (won ? 10 : 0);
 }

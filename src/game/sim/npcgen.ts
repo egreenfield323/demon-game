@@ -3,15 +3,20 @@ import { ARCHETYPES, SKIN_TONES } from '../data/archetypes';
 import type { DistrictDef } from '../data/districts';
 import { KEYWORDS } from '../data/keywords';
 import { TRAITS, type TraitId } from '../data/traits';
-import type { NpcDef, RunState } from './state';
+import { DAY_COUNT, type NpcDef, type RunState } from './state';
 
-/** Deterministic daily population for a district. */
-export function genNpcs(run: RunState, district: DistrictDef): NpcDef[] {
-  const rng = new Rng(`${run.seed}:${run.day}:${district.id}`);
+/** Deterministic daily population for a district. Stats scale with run
+ * difficulty (day across loops) and the world's softness. */
+export function genNpcs(run: RunState, district: DistrictDef, count = district.npcCount): NpcDef[] {
+  const rng = new Rng(`${run.seed}:${run.loop}:${run.day}:${district.id}`);
   const out: NpcDef[] = [];
   const usedNames = new Set<string>();
 
-  for (let i = 0; i < district.npcCount; i++) {
+  const difficulty = (run.loop - 1) * DAY_COUNT + run.day;
+  const willScale = district.softness * (1 + (difficulty - 1) * 0.12);
+  const susScale = district.softness * (1 + (difficulty - 1) * 0.06);
+
+  for (let i = 0; i < count; i++) {
     const arch = ARCHETYPES[rng.pick(district.archetypes)];
 
     let name = rng.pick(arch.names);
@@ -33,6 +38,7 @@ export function genNpcs(run: RunState, district: DistrictDef): NpcDef[] {
     let willpower = rng.int(arch.willpower[0], arch.willpower[1]);
     if (traits.some((t) => TRAITS[t].rider === 'willpower-10%')) willpower = Math.round(willpower * 0.9);
     if (quirk === 'DRUNK') willpower = Math.round(willpower * 0.85);
+    willpower = Math.min(150, Math.max(12, Math.round(willpower * willScale)));
 
     let patience = rng.int(arch.patience[0], arch.patience[1]);
     if (traits.some((t) => TRAITS[t].rider === 'patience+2')) patience += 2;
@@ -46,9 +52,11 @@ export function genNpcs(run: RunState, district: DistrictDef): NpcDef[] {
       desire,
       ick,
       maxWillpower: willpower,
-      susRate: rng.range(arch.susRate[0], arch.susRate[1]),
+      susRate: rng.range(arch.susRate[0], arch.susRate[1]) * susScale,
       basePatience: patience,
-      soulValue: rng.int(arch.soulValue[0], arch.soulValue[1]),
+      // Coins are decoupled from difficulty now — a flat random payout, so no
+      // world is "the money world". Scanning still reveals which souls pay more.
+      soulValue: rng.int(1, 3),
       skin: rng.pick(SKIN_TONES),
     });
   }

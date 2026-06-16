@@ -2,6 +2,7 @@ import type { CardId } from '../data/cards';
 import type { CharmId, ConsumableId } from '../data/charms';
 import type { Keyword } from '../data/keywords';
 import type { ArchetypeId } from '../data/archetypes';
+import type { DistrictId } from '../data/districts';
 import type { QuirkId, TraitId } from '../data/traits';
 import type { UpgradeId } from '../data/upgrades';
 
@@ -19,6 +20,11 @@ export const BARGAIN_TIME_COST = 25;
 export interface RunState {
   seed: number;
   day: number;
+  /** Which week-loop you're on. Loop 1 = first seven days; survive and you may
+   * sign on for loop 2, harder, and so on (Risk-of-Rain style). */
+  loop: number;
+  /** The world auto-assigned for the current day (players no longer choose). */
+  world: DistrictId;
   coins: number;
   soulsToday: number;
   totalSouls: number;

@@ -41,14 +41,21 @@ const BOLD_DMG = 0.8;
 const BOLD_SUSP = 1.0;
 const CRIT_DMG = 1.4;
 const CRIT_SUSP = 0.6;
+/** With the Steady Hand upgrade the sweet spot is smaller (set in the scene),
+ * crits hit far harder, and any miss reads as awkward — +25% suspicion. */
+const CRIT_DMG_PRECISE = 1.9;
+const MISS_SUSP_PRECISE = 1.25;
 
-function deliveryDmgMult(d?: Delivery): number {
+function deliveryDmgMult(d: Delivery | undefined, precise: boolean): number {
   if (!d) return 1;
-  return (1 + (d.boldness - 0.5) * BOLD_DMG) * (d.crit ? CRIT_DMG : 1);
+  const critMult = d.crit ? (precise ? CRIT_DMG_PRECISE : CRIT_DMG) : 1;
+  return (1 + (d.boldness - 0.5) * BOLD_DMG) * critMult;
 }
-function deliverySuspMult(d?: Delivery): number {
+function deliverySuspMult(d: Delivery | undefined, precise: boolean): number {
   if (!d) return 1;
-  return (1 + (d.boldness - 0.5) * BOLD_SUSP) * (d.crit ? CRIT_SUSP : 1);
+  let m = (1 + (d.boldness - 0.5) * BOLD_SUSP) * (d.crit ? CRIT_SUSP : 1);
+  if (precise && !d.crit) m *= MISS_SUSP_PRECISE; // flubbed the precision
+  return m;
 }
 
 export interface RevealState {
@@ -89,6 +96,8 @@ export interface BargainState {
   /** Permanent meta multipliers (1 = none). */
   dmgMult: number;
   suspMult: number;
+  /** Steady Hand upgrade: precise delivery (smaller sweet spot, bigger crits). */
+  precise: boolean;
   rng: Rng;
 }
 
@@ -103,6 +112,9 @@ export interface BargainOpts {
   handBonus?: number;
   dmgMult?: number;
   suspMult?: number;
+  precise?: boolean;
+  /** Delivery-meter sweep speed (scene-only; faster at higher difficulty). */
+  meterSpeed?: number;
   /** District heat etc. */
   startSuspicion?: number;
   /** Bottled Longing. */
@@ -163,6 +175,7 @@ export function startBargain(opts: BargainOpts): BargainState {
     flatDmgBonus: opts.flatDmgBonus,
     dmgMult: opts.dmgMult ?? 1,
     suspMult: opts.suspMult ?? 1,
+    precise: opts.precise ?? false,
     rng,
   };
 
@@ -249,7 +262,7 @@ export function playCard(st: BargainState, idx: number, delivery?: Delivery): Ba
   mult *= st.dmgMult; // permanent meta boost
   // Momentum: the chain so far amplifies this line (read before we update it).
   mult *= 1 + st.rapport * RAPPORT_STEP;
-  mult *= deliveryDmgMult(delivery); // how boldly you spoke it
+  mult *= deliveryDmgMult(delivery, st.precise); // how boldly you spoke it
 
   let dmg = Math.round(base * mult);
   if (st.npc.quirk === 'DRUNK' && dmg > 0) dmg = Math.round(dmg * st.rng.range(0.6, 1.4));
@@ -281,7 +294,7 @@ export function playCard(st: BargainState, idx: number, delivery?: Delivery): Ba
   if (susBase > 0) {
     // The deeper the combo, the harder the sell reads — and a bold delivery
     // pushes it further; a subtle one (or a crit) keeps them calmer.
-    let gain = susBase * st.npc.susRate * st.suspMult * (1 + comboLevel * SUSP_COMBO_STEP) * deliverySuspMult(delivery);
+    let gain = susBase * st.npc.susRate * st.suspMult * (1 + comboLevel * SUSP_COMBO_STEP) * deliverySuspMult(delivery, st.precise);
     if (st.npc.quirk === 'DEVOUT') gain *= 1.5;
     if (st.mood === 'wary') gain *= 1.5;
     if (st.charms.includes('silver-tongue')) gain *= 1.1;
@@ -422,13 +435,13 @@ export function previewPlay(st: BargainState, idx: number, delivery?: Delivery):
   if (st.charms.includes('silver-tongue')) mult *= 1.25;
   mult *= st.dmgMult;
   mult *= 1 + st.rapport * RAPPORT_STEP;
-  mult *= deliveryDmgMult(delivery);
+  mult *= deliveryDmgMult(delivery, st.precise);
   let dmg = hit === 'ick' ? 0 : Math.max(0, Math.round(base * mult));
 
   let susp = 0;
   const susBase = card.susp + (hit === 'ick' ? 6 : 0);
   if (susBase > 0) {
-    let g = susBase * st.npc.susRate * st.suspMult * (1 + st.rapport * SUSP_COMBO_STEP) * deliverySuspMult(delivery);
+    let g = susBase * st.npc.susRate * st.suspMult * (1 + st.rapport * SUSP_COMBO_STEP) * deliverySuspMult(delivery, st.precise);
     if (st.npc.quirk === 'DEVOUT') g *= 1.5;
     if (st.mood === 'wary') g *= 1.5;
     if (st.charms.includes('silver-tongue')) g *= 1.1;

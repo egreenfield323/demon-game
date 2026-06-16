@@ -2,7 +2,7 @@ import type { GameCtx, GScene } from '../ctx';
 import { CARDS } from '../data/cards';
 import { CHARMS, CONSUMABLES } from '../data/charms';
 import { buyItem, genShop, type ShopItem } from '../sim/shop';
-import { startDay } from '../sim/run';
+import { advanceWorld, startDay } from '../sim/run';
 import type { RunState } from '../sim/state';
 import { CityMapScene } from './citymap';
 import { drawHintBar, drawPanel, UI } from './hud';
@@ -41,6 +41,7 @@ export class NightScene implements GScene {
       if (this.sel === this.entries - 1) {
         c.audio.play('door');
         this.run.day += 1;
+        advanceWorld(this.run);
         startDay(this.run);
         c.transition.go(c, (cc) => cc.scenes.replace(cc, new CityMapScene(this.run)), {
           kind: 'rise',

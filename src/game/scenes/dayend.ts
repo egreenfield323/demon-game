@@ -1,15 +1,18 @@
 import type { GameCtx, GScene } from '../ctx';
 import { SATAN } from '../data/sprites/chars';
-import { quotaFor, type DayOutcome } from '../sim/run';
+import { advanceWorld, quotaFor, startDay, type DayOutcome } from '../sim/run';
 import { DAY_COUNT, type RunState } from '../sim/state';
+import { CityMapScene } from './citymap';
 import { drawHintBar, drawPanel, UI } from './hud';
 import { NightScene } from './night';
 import { RunEndScene } from './runend';
 
-/** Quota check at 20:00 (or early sleep). Either a tidy little summary,
- * or the Boss pays a visit. */
+/** Quota check at 20:00 (or early sleep). Either a tidy little summary, a
+ * survive-the-week fork (bank or loop), or the Boss pays a visit. */
 export class DayEndScene implements GScene {
   private t = 0;
+  /** On the final day: 0 = bank & clock out, 1 = sign on for another loop. */
+  private choice = 0;
 
   constructor(
     private run: RunState,
@@ -17,6 +20,10 @@ export class DayEndScene implements GScene {
     /** Dragged off by the Exorcist rather than a missed quota. */
     private caught = false,
   ) {}
+
+  private get finalDay(): boolean {
+    return this.run.day >= DAY_COUNT;
+  }
 
   enter(c: GameCtx): void {
     if (this.outcome === 'satan') c.audio.play('satan');
@@ -32,17 +39,41 @@ export class DayEndScene implements GScene {
       }
       return;
     }
+
+    // Surviving the seventh day: bank the run, or push into a harder loop.
+    if (this.finalDay) {
+      if (c.input.hit('up') || c.input.hit('down')) {
+        this.choice = 1 - this.choice;
+        c.audio.play('blip');
+      }
+      if (c.input.hit('confirm')) {
+        if (this.choice === 0) {
+          c.audio.play('confirm');
+          c.scenes.replace(c, new RunEndScene(this.run, true));
+        } else {
+          c.audio.play('satan');
+          this.run.loop += 1;
+          this.run.day = 1;
+          advanceWorld(this.run);
+          startDay(this.run);
+          c.transition.go(c, (cc) => cc.scenes.replace(cc, new CityMapScene(this.run)), {
+            kind: 'rise',
+            label: `LOOP ${this.run.loop}`,
+            sub: 'HARDER. RICHER. YOUR FUNERAL.',
+            color: UI.accent,
+          });
+        }
+      }
+      return;
+    }
+
     if (c.input.hit('confirm')) {
       c.audio.play('confirm');
-      if (this.run.day >= DAY_COUNT) {
-        c.scenes.replace(c, new RunEndScene(this.run, true));
-      } else {
-        c.transition.go(c, (cc) => cc.scenes.replace(cc, new NightScene(this.run)), {
-          kind: 'descend',
-          label: 'THE COMMISSARY',
-          color: UI.blue,
-        });
-      }
+      c.transition.go(c, (cc) => cc.scenes.replace(cc, new NightScene(this.run)), {
+        kind: 'descend',
+        label: 'THE COMMISSARY',
+        color: UI.blue,
+      });
     }
   }
 
@@ -81,22 +112,32 @@ export class DayEndScene implements GScene {
     }
 
     r.clear('#0e0a12');
-    const won = this.run.day >= DAY_COUNT;
-    drawPanel(c, 90, 60, 300, 130, this.outcome === 'forgiven' ? 'A MEMO ARRIVES' : 'DAY COMPLETE');
-    r.text(`DAY ${this.run.day} / ${DAY_COUNT}`, 240, 84, UI.gold, { align: 'center', scale: 2 });
+    drawPanel(c, 90, 56, 300, 96, this.outcome === 'forgiven' ? 'A MEMO ARRIVES' : 'DAY COMPLETE');
+    r.text(this.run.loop > 1 ? `DAY ${this.run.day}/${DAY_COUNT} - LOOP ${this.run.loop}` : `DAY ${this.run.day} / ${DAY_COUNT}`, 240, 78, UI.gold, { align: 'center', scale: 2 });
 
     if (this.outcome === 'forgiven') {
-      r.text('"Per the attached form, this failure', 240, 110, UI.text, { align: 'center' });
-      r.text('has been reclassified as a SUCCESS."', 240, 120, UI.text, { align: 'center' });
-      r.text('- HR, with feeling. (Loophole spent.)', 240, 132, UI.dim, { align: 'center' });
+      r.text('"This failure has been reclassified', 240, 104, UI.text, { align: 'center' });
+      r.text('as a SUCCESS." - HR. (Loophole spent.)', 240, 116, UI.dim, { align: 'center' });
     } else {
-      r.text(`SOULS TODAY: ${this.run.soulsToday} / ${quotaFor(this.run)}`, 240, 110, UI.good, { align: 'center' });
-      r.text(`COMMISSION HELD: $${this.run.coins}`, 240, 122, UI.gold, { align: 'center' });
-      r.text(`SOULS THIS WEEK: ${this.run.totalSouls}`, 240, 134, UI.text, { align: 'center' });
+      r.text(`SOULS TODAY: ${this.run.soulsToday} / ${quotaFor(this.run)}`, 240, 104, UI.good, { align: 'center' });
+      r.text(`COMMISSION HELD: $${this.run.coins}`, 240, 116, UI.gold, { align: 'center' });
+      r.text(`SOULS THIS WEEK: ${this.run.totalSouls}`, 240, 128, UI.text, { align: 'center' });
     }
 
-    const next = won ? 'COLLECT YOUR PROMOTION' : 'VISIT THE COMMISSARY';
-    r.text(`[ENTER] ${next}`, 240, 165, UI.accent, { align: 'center' });
-    drawHintBar(c, won ? 'SEVEN DAYS SURVIVED' : 'THE BOSS IS... NOT DISPLEASED');
+    if (this.finalDay) {
+      r.text('A WEEK SURVIVED. The bus idles. So does the Pit.', 240, 162, UI.text, { align: 'center' });
+      const opt = (i: number, label: string, col: string): void => {
+        const sel = this.choice === i;
+        const y = 178 + i * 16;
+        if (sel) r.rect(120, y - 3, 240, 14, UI.panelLight);
+        r.text(`${sel ? '> ' : '  '}${label}`, 240, y, sel ? col : UI.dim, { align: 'center' });
+      };
+      opt(0, 'CLOCK OUT - bank your Sin', UI.gold);
+      opt(1, `SIGN ON - loop ${this.run.loop + 1}, harder & richer`, UI.accent);
+      drawHintBar(c, '[UP/DOWN] CHOOSE   [ENTER] CONFIRM   PUSH YOUR LUCK?');
+    } else {
+      r.text('[ENTER] VISIT THE COMMISSARY', 240, 165, UI.accent, { align: 'center' });
+      drawHintBar(c, 'THE BOSS IS... NOT DISPLEASED');
+    }
   }
 }

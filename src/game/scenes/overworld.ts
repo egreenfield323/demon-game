@@ -1,12 +1,12 @@
 import { Rng } from '../../engine/rng';
 import type { GameCtx, GScene } from '../ctx';
 import { ARCHETYPES } from '../data/archetypes';
-import { DISTRICTS, isWalkable, MAP_H, MAP_W, type DistrictId } from '../data/districts';
+import { DISTRICTS, isWalkable, worldSize, type DistrictId, type ThemeId } from '../data/districts';
 import { AURAS, buildCharacter, CHAR_H, HALO, HORNS, PLAYER_PALETTE, PRIEST_PALETTE, SATAN, type CharSprites } from '../data/sprites/chars';
-import { buildTileSet, TILE, type TileSet } from '../data/sprites/tiles';
+import { BOAT_SPRITE, buildTileSet, TILE, type TileSet } from '../data/sprites/tiles';
 import type { RevealState } from '../sim/bargain';
 import { genNpcs } from '../sim/npcgen';
-import { aurasVisible, clockRate, endDayOutcome, quotaFor, scanCosts, soulPayout } from '../sim/run';
+import { aurasVisible, clockRate, endDayOutcome, meterSpeedFor, quotaFor, runDifficulty, scanCosts, soulPayout } from '../sim/run';
 import { BARGAIN_TIME_COST, DAY_END_MIN, DAY_START_MIN, type NpcDef, type RunState } from '../sim/state';
 import { BargainScene } from './bargain';
 import { DayEndScene } from './dayend';
@@ -32,6 +32,9 @@ interface WorldNpc {
   bark: { text: string; t: number } | null;
   barkCooldown: number;
   sprites: CharSprites;
+  /** Sailor: sits still in a boat (no wandering), bobbing on the swell. */
+  moored?: boolean;
+  boatPhase?: number;
 }
 
 const DEEP_SCAN_HOLD = 0.85;
@@ -49,6 +52,15 @@ interface Hunter {
   frame: number;
   animT: number;
 }
+
+/** Per-world colour wash for the creepy grade, so each area reads distinct. */
+const WORLD_TINT: Record<ThemeId, string> = {
+  park: '#06030e',
+  city: '#04060e',
+  stoop: '#0c0406',
+  forest: '#03120a',
+  marina: '#02091a',
+};
 
 export class OverworldScene implements GScene {
   private run: RunState;
@@ -72,10 +84,17 @@ export class OverworldScene implements GScene {
   private priestSprites!: CharSprites;
   /** Walkable tiles far from spawn, reused to place the hunter. */
   private spawnSpots: Array<[number, number]> = [];
+  /** This day's freshly generated map (size grows with difficulty). */
+  private layout: string[] = [];
+  private mapW = 0;
+  private mapH = 0;
+  private spawn: [number, number] = [0, 0];
+  /** Decorative rowboats bobbing on the water (marina). */
+  private boats: Array<{ x: number; y: number; phase: number }> = [];
 
-  constructor(run: RunState, districtId: DistrictId) {
+  constructor(run: RunState) {
     this.run = run;
-    this.districtId = districtId;
+    this.districtId = run.world;
   }
 
   private get district() {
@@ -87,18 +106,28 @@ export class OverworldScene implements GScene {
     this.tiles = buildTileSet(d.theme);
     this.playerSprites = buildCharacter(PLAYER_PALETTE, 'player');
     this.priestSprites = buildCharacter(PRIEST_PALETTE, 'priest');
-    this.wrng = new Rng(`world:${this.run.seed}:${this.run.day}:${d.id}`);
-    this.px = d.spawn[0] * TILE + TILE / 2;
-    this.py = d.spawn[1] * TILE + TILE - 3;
+    this.wrng = new Rng(`world:${this.run.seed}:${this.run.loop}:${this.run.day}:${d.id}`);
 
-    // Spawn the day's population on walkable tiles away from the player.
-    const defs = genNpcs(this.run, d);
+    // Generate this day's map fresh; it grows with difficulty.
+    const diff = runDifficulty(this.run);
+    const [w, h] = worldSize(d, diff);
+    const gen = d.gen(w, h, new Rng(`map:${this.run.seed}:${this.run.loop}:${this.run.day}:${d.id}`));
+    this.layout = gen.layout;
+    this.mapW = w;
+    this.mapH = h;
+    this.spawn = gen.spawn;
+    this.px = this.spawn[0] * TILE + TILE / 2;
+    this.py = this.spawn[1] * TILE + TILE - 3;
+
+    // More people work the bigger, harder grounds.
+    const count = d.npcCount + Math.min(6, Math.floor((diff - 1) / 2));
+    const defs = genNpcs(this.run, d, count);
     const candidates: Array<[number, number]> = [];
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        const ch = d.layout[y][x];
+    for (let y = 1; y < this.mapH - 1; y++) {
+      for (let x = 1; x < this.mapW - 1; x++) {
+        const ch = this.layout[y][x];
         if (!isWalkable(ch) || ch === 'o') continue;
-        const dist = Math.abs(x - d.spawn[0]) + Math.abs(y - d.spawn[1]);
+        const dist = Math.abs(x - this.spawn[0]) + Math.abs(y - this.spawn[1]);
         if (dist >= 6) candidates.push([x, y]);
       }
     }
@@ -125,6 +154,34 @@ export class OverworldScene implements GScene {
         sprites: buildCharacter({ ...arch.palette, s: def.skin }, `${def.archetype}-${def.skin}`),
       };
     });
+
+    // Marina: float some boats on the water; moor a sailor in one you can pitch.
+    this.boats = [];
+    if (d.theme === 'marina') {
+      const water: Array<[number, number]> = [];
+      for (let y = 1; y < this.mapH - 1; y++) {
+        for (let x = 1; x < this.mapW - 1; x++) {
+          if (this.layout[y][x] !== 'a') continue;
+          const reachable =
+            isWalkable(this.layout[y][x - 1]) || isWalkable(this.layout[y][x + 1]) || isWalkable(this.layout[y - 1][x]) || isWalkable(this.layout[y + 1][x]);
+          if (reachable) water.push([x, y]);
+        }
+      }
+      const picks = this.wrng.shuffle(water);
+      if (picks.length && this.npcs.length) {
+        const [bx, by] = picks[0];
+        const sailor = this.npcs[0];
+        sailor.x = bx * TILE + TILE / 2;
+        sailor.y = by * TILE + TILE / 2;
+        sailor.tx = null;
+        sailor.ty = null;
+        sailor.moored = true;
+        sailor.boatPhase = this.wrng.range(0, Math.PI * 2);
+      }
+      for (const [bx, by] of picks.slice(1, 4)) {
+        this.boats.push({ x: bx * TILE + TILE / 2, y: by * TILE + TILE / 2, phase: this.wrng.range(0, Math.PI * 2) });
+      }
+    }
   }
 
   // --- helpers ---
@@ -132,8 +189,8 @@ export class OverworldScene implements GScene {
   private tileCharAt(px: number, py: number): string {
     const tx = Math.floor(px / TILE);
     const ty = Math.floor(py / TILE);
-    if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return 'w';
-    return this.district.layout[ty][tx];
+    if (tx < 0 || ty < 0 || tx >= this.mapW || ty >= this.mapH) return 'w';
+    return this.layout[ty][tx];
   }
 
   private walkableAt(px: number, py: number): boolean {
@@ -285,6 +342,9 @@ export class OverworldScene implements GScene {
         n.frame = 0;
         continue;
       }
+
+      // The sailor stays put in the boat — no wandering onto the water.
+      if (n.moored) continue;
 
       if (n.tx !== null && n.ty !== null) {
         const ddx = n.tx - n.x;
@@ -450,6 +510,8 @@ export class OverworldScene implements GScene {
           handBonus: c.meta.has('extra-hand') ? 1 : 0,
           dmgMult: c.meta.has('unholy-charisma') ? 1.15 : 1,
           suspMult: c.meta.has('cool-customer') ? 0.85 : 1,
+          precise: c.meta.has('steady-hand'),
+          meterSpeed: meterSpeedFor(this.run),
           startSuspicion: this.run.fledToday * 10,
           revealDesire,
           reveal: n.reveal,
@@ -498,18 +560,17 @@ export class OverworldScene implements GScene {
 
   draw(c: GameCtx): void {
     const r = c.r;
-    const camX = Math.max(0, Math.min(MAP_W * TILE - r.w, this.px - r.w / 2));
-    const camY = Math.max(0, Math.min(MAP_H * TILE - r.h, this.py - r.h / 2 - 6));
+    const camX = Math.max(0, Math.min(this.mapW * TILE - r.w, this.px - r.w / 2));
+    const camY = Math.max(0, Math.min(this.mapH * TILE - r.h, this.py - r.h / 2 - 6));
 
     r.clear('#0a0608');
-    const d = this.district;
     const tx0 = Math.floor(camX / TILE);
     const ty0 = Math.floor(camY / TILE);
-    const tx1 = Math.min(MAP_W - 1, Math.ceil((camX + r.w) / TILE));
-    const ty1 = Math.min(MAP_H - 1, Math.ceil((camY + r.h) / TILE));
+    const tx1 = Math.min(this.mapW - 1, Math.ceil((camX + r.w) / TILE));
+    const ty1 = Math.min(this.mapH - 1, Math.ceil((camY + r.h) / TILE));
     for (let ty = ty0; ty <= ty1; ty++) {
       for (let tx = tx0; tx <= tx1; tx++) {
-        const ch = d.layout[ty][tx];
+        const ch = this.layout[ty][tx];
         const sx = tx * TILE - camX;
         const sy = ty * TILE - camY;
         const entry = this.tiles.tiles[ch];
@@ -525,6 +586,12 @@ export class OverworldScene implements GScene {
           }
         } else {
           r.sprite(entry.spr, sx, sy);
+          if (ch === 'a') {
+            // Drifting glints make the water feel alive (and it blocks paths).
+            const drift = (this.t * 10 + ty * 9) % TILE;
+            r.rect(sx + (drift % TILE), sy + 4, 4, 1, '#cfeaff', 0.4);
+            r.rect(sx + ((drift + 8) % TILE), sy + 10, 3, 1, '#a9d4f0', 0.35);
+          }
         }
       }
     }
@@ -542,13 +609,25 @@ export class OverworldScene implements GScene {
 
     // Y-sorted bodies.
     const bodies: Array<{ y: number; fn: () => void }> = [];
+    // Empty boats bobbing on the swell.
+    for (const b of this.boats) {
+      bodies.push({
+        y: b.y,
+        fn: () => {
+          const bob = Math.sin(this.t * 2 + b.phase) * 2;
+          r.sprite(BOAT_SPRITE, b.x - 16 - camX, b.y - 18 + bob - camY, { scale: 2 });
+        },
+      });
+    }
     for (const n of this.npcs) {
       if (n.gone) continue;
       bodies.push({
         y: n.y,
         fn: () => {
+          const bob = n.moored ? Math.sin(this.t * 2 + (n.boatPhase ?? 0)) * 2 : 0;
+          if (n.moored) r.sprite(BOAT_SPRITE, n.x - 16 - camX, n.y - 10 + bob - camY, { scale: 2 });
           const spr = n.dir === 'up' ? n.sprites.up[n.frame] : n.dir === 'down' ? n.sprites.down[n.frame] : n.sprites.side[n.frame];
-          r.sprite(spr, n.x - 8 - camX, n.y - CHAR_H + 1 - camY, {
+          r.sprite(spr, n.x - 8 - camX, n.y - CHAR_H + 1 + bob - camY, {
             flipX: n.dir === 'right',
             alpha: n.done ? 0.65 : 1,
           });
@@ -652,9 +731,12 @@ export class OverworldScene implements GScene {
       r.rect(this.px - 10 - camX, this.py - CHAR_H - 6 - camY, Math.round(20 * frac), 2, UI.fire);
     }
 
-    // --- Creepy grade: cold near-black wash, a heavy vignette, the odd
-    // guttering flicker. Center stays legible; the edges close in. ---
-    r.dim(0.17, '#06030e');
+    // --- Creepy grade: cold near-black wash, a warm dusk that deepens through
+    // the day, a heavy vignette, and the odd guttering flicker. ---
+    const dayLen = DAY_END_MIN - DAY_START_MIN;
+    const dayFrac = Math.max(0, Math.min(1, (this.run.timeMin - DAY_START_MIN) / dayLen));
+    r.dim(0.17, WORLD_TINT[this.district.theme]);
+    r.dim(0.04 + dayFrac * 0.16, '#2a1206'); // low-sun warmth, growing toward dusk
     const bands = 22;
     for (let i = 0; i < bands; i++) {
       const a = 0.5 * Math.pow(1 - i / bands, 1.6);
@@ -668,8 +750,6 @@ export class OverworldScene implements GScene {
 
     // Looming dread: the Boss leans down over the street as the clock runs out
     // with quota unmet. Faint and high so it haunts without blocking play.
-    const dayLen = DAY_END_MIN - DAY_START_MIN;
-    const dayFrac = Math.max(0, Math.min(1, (this.run.timeMin - DAY_START_MIN) / dayLen));
     const unmet = this.run.soulsToday < quotaFor(this.run);
     const dread = Math.max(0, Math.min(1, unmet ? dayFrac : dayFrac * 0.25));
     if (dread > 0.05) {
@@ -678,6 +758,23 @@ export class OverworldScene implements GScene {
       r.sprite(SATAN, r.w / 2 - 96, drop, { scale: 8, alpha: 0.1 + dread * 0.4 });
       const pulse = 0.04 + dread * (0.1 + Math.sin(this.t * 4) * 0.03);
       r.dim(Math.max(0, pulse), '#3a0610');
+    }
+
+    // Light pools: lamps and the manhole cast warm glows that cut the gloom.
+    for (let ty = ty0; ty <= ty1; ty++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const ch = this.layout[ty][tx];
+        if (ch !== 'l' && ch !== 'o') continue;
+        const cx = tx * TILE - camX + TILE / 2;
+        const cy = ty * TILE - camY + (ch === 'l' ? 3 : TILE / 2);
+        const warm = ch === 'o' ? '#ff7a3a' : '#ffca7a';
+        const fl = 0.82 + Math.sin(this.t * 7 + tx * 3 + ty) * 0.18;
+        const rad = ch === 'o' ? 24 : 17;
+        for (let k = 3; k >= 1; k--) {
+          const s = (rad * k) / 3;
+          r.rect(cx - s, cy - s, s * 2, s * 2, warm, (0.05 + (3 - k) * 0.045) * fl);
+        }
+      }
     }
 
     // The hunt: a blood-red pulse that swells as the priest closes in.
